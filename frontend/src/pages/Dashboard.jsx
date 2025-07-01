@@ -1,38 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import {
-  AppBar,
-  Toolbar,
-  Box,
-  Typography,
-  Paper,
-  IconButton,
-  Avatar,
-  Menu,
-  MenuItem,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
-  Drawer,
-  List,
-  ListItem,
-  ListItemButton,
-  Pagination,
-  Badge,
-  Skeleton,
-  Rating,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem as MuiMenuItem
+  AppBar, Toolbar, Box, Typography, Paper, IconButton, Avatar, Menu, MenuItem,
+  Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Drawer,
+  List, ListItem, ListItemButton, Pagination, Badge, Skeleton, Rating,
+  FormControl, InputLabel, Select, MenuItem as MuiMenuItem
 } from '@mui/material';
 import {
-  Trash2,
-  ShoppingCart,
-  XCircle,
-  CheckCircle2,
-  Menu as MenuIcon,
+  Trash2, ShoppingCart, XCircle, CheckCircle2, Menu as MenuIcon
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ToastContainer, toast } from 'react-toastify';
@@ -76,7 +50,11 @@ const Dashboard = () => {
 
       try {
         setLoading(true);
-        const res = await fetch('http://localhost:5000/products', {
+        const queryParams = new URLSearchParams();
+        if (category !== 'All') queryParams.append('category', category);
+        if (sortOrder !== 'default') queryParams.append('sort', sortOrder);
+
+        const res = await fetch(`http://localhost:5000/products?${queryParams.toString()}`, {
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`
@@ -101,7 +79,7 @@ const Dashboard = () => {
     };
 
     fetchProducts();
-  }, [navigate]);
+  }, [navigate, category, sortOrder]);
 
   const handleAddToCart = (product) => {
     const cart = JSON.parse(localStorage.getItem('cart')) || [];
@@ -143,17 +121,7 @@ const Dashboard = () => {
     navigate('/login');
   };
 
-  const filteredProducts = products.filter((product) => {
-    return category === 'All' || product.category === category;
-  });
-
-  const sortedProducts = [...filteredProducts].sort((a, b) => {
-    if (sortOrder === 'lowToHigh') return a.price - b.price;
-    if (sortOrder === 'highToLow') return b.price - a.price;
-    return 0;
-  });
-
-  const paginatedProducts = sortedProducts.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+  const paginatedProducts = products.slice((page - 1) * itemsPerPage, page * itemsPerPage);
 
   return (
     <Box>
@@ -218,36 +186,32 @@ const Dashboard = () => {
         </Slider>
       </Box>
 
-      {/* Filter + Sort UI (Amazon-style) */}
+      {/* Filter UI */}
       <Paper elevation={3} sx={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        p: 2,
-        m: 2,
-        borderRadius: 2,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-        backgroundColor: '#f5f5f5'
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        flexWrap: 'wrap', p: 2, m: 2, borderRadius: 2, backgroundColor: '#f5f5f5'
       }}>
-        <Typography variant="h6" sx={{ mb: { xs: 1, md: 0 } }}>
-          Filter & Sort Products
-        </Typography>
-
+        <Typography variant="h6" sx={{ mb: { xs: 1, md: 0 } }}>Filter & Sort Products</Typography>
         <Box display="flex" gap={2} flexWrap="wrap">
           <FormControl size="small" sx={{ minWidth: 180 }}>
             <InputLabel>Category</InputLabel>
-            <Select value={category} onChange={(e) => setCategory(e.target.value)} label="Category">
+            <Select value={category} onChange={(e) => {
+              setCategory(e.target.value);
+              setPage(1);
+            }} label="Category">
               <MuiMenuItem value="All">All</MuiMenuItem>
               <MuiMenuItem value="Electronics">Electronics</MuiMenuItem>
-              <MuiMenuItem value="Clothing">Clothing</MuiMenuItem>
-              <MuiMenuItem value="Home">Home</MuiMenuItem>
+              <MuiMenuItem value="snack">snack</MuiMenuItem>
+              <MuiMenuItem value="utilities">Utilities</MuiMenuItem>
             </Select>
           </FormControl>
 
           <FormControl size="small" sx={{ minWidth: 180 }}>
             <InputLabel>Sort By</InputLabel>
-            <Select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} label="Sort By">
+            <Select value={sortOrder} onChange={(e) => {
+              setSortOrder(e.target.value);
+              setPage(1);
+            }} label="Sort By">
               <MuiMenuItem value="default">Default</MuiMenuItem>
               <MuiMenuItem value="lowToHigh">Price: Low to High</MuiMenuItem>
               <MuiMenuItem value="highToLow">Price: High to Low</MuiMenuItem>
@@ -256,7 +220,7 @@ const Dashboard = () => {
         </Box>
       </Paper>
 
-      {/* Products Section */}
+      {/* Products */}
       <Box sx={{ p: 3 }}>
         <Typography variant="h5" gutterBottom>Products</Typography>
         <Box sx={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 3, pb: 3 }}>
@@ -272,19 +236,16 @@ const Dashboard = () => {
           ) : (
             paginatedProducts.map((product) => (
               <Paper key={product.id} elevation={4} sx={{
-                width: 250, p: 2, borderRadius: 2, bgcolor: '#fff', position: 'relative', textAlign: 'center'
+                width: 250, p: 2, borderRadius: 2, bgcolor: '#fff',
+                position: 'relative', textAlign: 'center'
               }}>
                 <Box sx={{ position: 'relative', width: '100%', height: 180 }}>
                   <img src={product.image} alt={product.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                   <IconButton
                     size="small"
                     sx={{
-                      position: 'absolute',
-                      bottom: 8,
-                      right: 8,
-                      bgcolor: '#1976d2',
-                      color: 'white',
-                      '&:hover': { bgcolor: '#115293' }
+                      position: 'absolute', bottom: 8, right: 8,
+                      bgcolor: '#1976d2', color: 'white', '&:hover': { bgcolor: '#115293' }
                     }}
                     onClick={() => handleAddToCart(product)}
                   >
@@ -295,17 +256,23 @@ const Dashboard = () => {
                 <Typography variant="body2" color="text.secondary">{product.tagline}</Typography>
                 <Typography variant="h6" color="green">₹{product.price || 1500}</Typography>
                 <Rating value={4.3} precision={0.5} size="small" readOnly />
-                <IconButton color="error" onClick={() => handleDeleteClick(product.id)}><Trash2 size={18} /></IconButton>
+                <IconButton color="error" onClick={() => handleDeleteClick(product.id)}>
+                  <Trash2 size={18} />
+                </IconButton>
               </Paper>
             ))
           )}
         </Box>
 
         <Box display="flex" justifyContent="center" mt={2}>
-          <Pagination count={Math.ceil(sortedProducts.length / itemsPerPage)} page={page} onChange={(e, value) => setPage(value)} />
+          <Pagination
+            count={Math.ceil(products.length / itemsPerPage)}
+            page={page}
+            onChange={(e, value) => setPage(value)}
+          />
         </Box>
 
-        {/* Delete Confirmation Dialog */}
+        {/* Delete Dialog */}
         <Dialog open={openConfirm} onClose={() => setOpenConfirm(false)}>
           <DialogTitle>Confirm Deletion</DialogTitle>
           <DialogContent>

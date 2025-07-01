@@ -8,7 +8,7 @@ require('dotenv').config();
 
 const app = express();
 const PORT = 5000;
-const JWT_SECRET = process.env.JWT_SECRET 
+const JWT_SECRET = process.env.JWT_SECRET;
 
 app.use(cors());
 app.use(express.json());
@@ -51,10 +51,10 @@ const insertDefaultData = async () => {
     const result = await query('SELECT COUNT(*) AS count FROM products');
     if (result[0].count === 0) {
       const insertQuery = `
-        INSERT INTO products (name, tagline, description, image)
+        INSERT INTO products (name, tagline, description, image, category, price)
         VALUES 
-          ('Eco Bottle', 'Hydrate Smartly', 'Eco-friendly bottle.', 'images/eco_bottle.jpg'),
-          ('Smart Watch', 'Time Meets Tech', 'Fitness smartwatch.', 'images/smart_watch.jpg')
+          ('Eco Bottle', 'Hydrate Smartly', 'Eco-friendly bottle.', 'images/eco_bottle.jpg', 'Home', 399),
+          ('Smart Watch', 'Time Meets Tech', 'Fitness smartwatch.', 'images/smart_watch.jpg', 'Electronics', 1999)
       `;
       await query(insertQuery);
       console.log('🟢 Default products inserted.');
@@ -125,22 +125,38 @@ app.post('/signin', async (req, res) => {
   }
 });
 
-// 🔐 Protected Product Routes
+// ✅ Filter + Sort Enabled Product Route
 app.get('/products', authenticateToken, async (req, res) => {
   try {
-    const products = await query('SELECT * FROM products');
+    const { category, sort } = req.query;
+    let baseQuery = 'SELECT * FROM products';
+    const params = [];
+
+    if (category && category !== 'All') {
+      baseQuery += ' WHERE category = ?';
+      params.push(category);
+    }
+
+    if (sort === 'lowToHigh') {
+      baseQuery += ' ORDER BY price ASC';
+    } else if (sort === 'highToLow') {
+      baseQuery += ' ORDER BY price DESC';
+    }
+
+    const products = await query(baseQuery, params);
     res.json(products);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
+// 🔐 Add Product
 app.post('/products', authenticateToken, async (req, res) => {
-  const { name, tagline, description, image } = req.body;
+  const { name, tagline, description, image, category, price } = req.body;
   try {
     const result = await query(
-      'INSERT INTO products (name, tagline, description, image) VALUES (?, ?, ?, ?)',
-      [name, tagline, description, image]
+      'INSERT INTO products (name, tagline, description, image, category, price) VALUES (?, ?, ?, ?, ?, ?)',
+      [name, tagline, description, image, category, price]
     );
     res.status(201).json({ message: 'Product added', id: result.insertId });
   } catch (err) {
@@ -148,13 +164,14 @@ app.post('/products', authenticateToken, async (req, res) => {
   }
 });
 
+// 🔐 Edit Product
 app.put('/products/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  const { name, tagline, description, image } = req.body;
+  const { name, tagline, description, image, category, price } = req.body;
   try {
     await query(
-      'UPDATE products SET name = ?, tagline = ?, description = ?, image = ? WHERE id = ?',
-      [name, tagline, description, image, id]
+      'UPDATE products SET name = ?, tagline = ?, description = ?, image = ?, category = ?, price = ? WHERE id = ?',
+      [name, tagline, description, image, category, price, id]
     );
     res.json({ message: 'Product updated' });
   } catch (err) {
@@ -162,6 +179,7 @@ app.put('/products/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// 🔐 Delete Product
 app.delete('/products/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   try {
