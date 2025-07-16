@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -16,10 +16,14 @@ import {
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const CartPage = () => {
   const [cartItems, setCartItems] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showPayPal, setShowPayPal] = useState(false);
+  const paypalRef = useRef(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -31,8 +35,60 @@ const CartPage = () => {
     }, 800); // Simulates loading
   }, []);
 
+  useEffect(() => {
+    if (showPayPal && window.paypal && paypalRef.current) {
+      window.paypal.Buttons({
+        createOrder: (data, actions) => {
+          return actions.order.create({
+            purchase_units: [{
+              amount: {
+                value: cartItems.reduce((sum, item) => sum + (item.price || 1500) * item.quantity, 0).toFixed(2)
+              }
+            }]
+          });
+        },
+        onApprove: (data, actions) => {
+          return actions.order.capture().then(function(details) {
+            const productNames = cartItems.map(item => item.name).join(', ');
+            toast.success(`Order placed for: ${productNames}`);
+            // You can add order saving logic here
+          });
+        }
+      }).render(paypalRef.current);
+    }
+  }, [showPayPal, cartItems]);
+
+  useEffect(() => {
+    if (showPayPal && !window.paypal) {
+      const script = document.createElement('script');
+      script.src = 'https://www.paypal.com/sdk/js?client-id=AXa2PL8lJEEoKPO8nKbAN3h6qtRxbK3OTY46-PLESpSN2soahg38DuLUv8nwbQA5C5HJXLHhDZTkyRnD'; // Use your real client-id in production
+      script.addEventListener('load', () => {
+        if (paypalRef.current) {
+          window.paypal.Buttons({
+            createOrder: (data, actions) => {
+              return actions.order.create({
+                purchase_units: [{
+                  amount: {
+                    value: cartItems.reduce((sum, item) => sum + (item.price || 1500) * item.quantity, 0).toFixed(2)
+                  }
+                }]
+              });
+            },
+            onApprove: (data, actions) => {
+              return actions.order.capture().then(function(details) {
+                const productNames = cartItems.map(item => item.name).join(', ');
+                toast.success(`Order placed for: ${productNames}`);
+              });
+            }
+          }).render(paypalRef.current);
+        }
+      });
+      document.body.appendChild(script);
+    }
+  }, [showPayPal, cartItems]);
+
   const handleBuyNow = () => {
-    alert('Redirecting to checkout or payment gateway...');
+    setShowPayPal(true);
   };
 
   const handleRemoveItem = (id) => {
@@ -140,12 +196,12 @@ const CartPage = () => {
         </Card>
       ))}
 
-      {!loading && (
+      {!loading && !showPayPal && (
         <Box display="flex" gap={2} mt={4}>
           <Button
             variant="contained"
             sx={{ backgroundColor: '#3f51b5', color: 'white' }}
-            onClick={handleBuyNow}
+            onClick={() => setShowPayPal(true)}
             fullWidth
           >
             Proceed to Buy ({cartItems.length} {cartItems.length > 1 ? 'items' : 'item'})
@@ -158,6 +214,13 @@ const CartPage = () => {
           >
             Continue Shopping
           </Button>
+        </Box>
+      )}
+      {showPayPal && (
+        <Box mt={4} display="flex" flexDirection="column" alignItems="center">
+          <Typography variant="h6" mb={2}>Pay securely with PayPal</Typography>
+          <div ref={paypalRef} />
+          <ToastContainer position="top-right" autoClose={2000} />
         </Box>
       )}
     </Box>

@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Avatar,
   Button,
@@ -8,9 +7,13 @@ import {
   Box,
   Grid,
   Typography,
+  Link,
+  Divider
 } from '@mui/material';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import { useNavigate } from 'react-router-dom';
+import GoogleIcon from '@mui/icons-material/Google';
 
 const LoginPage = () => {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -20,11 +23,10 @@ const LoginPage = () => {
     email: '',
     password: '',
   });
+
   const navigate = useNavigate();
 
-  const goToDashboard = () => {
-    navigate('/dashboard');
-  };
+  const goToDashboard = () => navigate('/dashboard');
 
   const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const validatePassword = (password) =>
@@ -35,18 +37,14 @@ const LoginPage = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     const { name, email, password } = formData;
-    const emailValid = validateEmail(email);
-    const passwordValid = validatePassword(password);
 
     let newErrors = {};
-    if (!emailValid) newErrors.email = 'Invalid email format';
-    if (!passwordValid)
-      newErrors.password =
-        'Password must be 8+ characters & include a special character';
+    if (!validateEmail(email)) newErrors.email = 'Invalid email format';
+    if (!validatePassword(password))
+      newErrors.password = 'Must be 8+ characters and include a special character';
     if (isSignUp && !name.trim()) newErrors.name = 'Name is required';
 
     setErrors(newErrors);
@@ -64,7 +62,6 @@ const LoginPage = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-
       const result = await res.json();
 
       if (!res.ok) {
@@ -78,13 +75,12 @@ const LoginPage = () => {
         toast.success('Login successful!');
         setTimeout(goToDashboard, 1500);
       } else {
-        toast.success(result.message || 'Signup successful!');
+        toast.success('Signup successful!');
         setIsSignUp(false);
         setFormData({ name: '', email: '', password: '' });
       }
-    } catch (error) {
-      toast.error('Server error. Please try again later.');
-      console.error('Error:', error);
+    } catch (err) {
+      toast.error('Server error. Try again later.');
     }
   };
 
@@ -98,82 +94,132 @@ const LoginPage = () => {
       <ToastContainer position="top-right" autoClose={3000} />
       <Grid
         container
-        component="main"
         sx={{
           height: '100vh',
-          backgroundColor: '#f0f2f5',
+          backgroundImage:
+            'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          backgroundRepeat: 'no-repeat',
+          backgroundSize: 'cover',
           justifyContent: 'center',
           alignItems: 'center',
         }}
       >
-        <Grid item xs={11} sm={8} md={4} component={Paper} elevation={6} square sx={{ maxWidth: 400 }}>
-          <Box
-            sx={{
-              my: 4,
-              mx: 4,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-            }}
-          >
-            <Avatar alt="User Avatar" src="/user.jpg" sx={{ width: 100, height: 100, mb: 2 }} />
-            <Typography component="h1" variant="h5">
+        <Paper
+          elevation={10}
+          sx={{
+            width: { xs: '90%', sm: '70%', md: '35%' },
+            borderRadius: 3,
+            padding: 4,
+            backdropFilter: 'blur(10px)',
+            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+          }}
+        >
+          <Box sx={{ textAlign: 'center', mb: 3 }}>
+            <img
+              src="/newlogo.png"
+              alt="NewIndia Shop"
+              width={90}
+              style={{ marginBottom: 8 }}
+            />
+            <Typography variant="h5" fontWeight="bold">
               {isSignUp ? 'Sign Up' : 'Sign In'}
             </Typography>
-            <Box component="form" noValidate onSubmit={handleSubmit} sx={{ mt: 1, width: '100%' }}>
-              {isSignUp && (
-                <TextField
-                  margin="normal"
-                  required
-                  fullWidth
-                  id="name"
-                  label="Full Name"
-                  name="name"
-                  autoComplete="name"
-                  value={formData.name}
-                  onChange={handleChange}
-                  error={!!errors.name}
-                  helperText={errors.name}
-                />
-              )}
+          </Box>
+
+          <Box component="form" noValidate onSubmit={handleSubmit}>
+            {isSignUp && (
               <TextField
                 margin="normal"
-                required
                 fullWidth
-                id="email"
-                label="Email Address"
-                name="email"
-                autoComplete="email"
-                value={formData.email}
+                label="Full Name"
+                name="name"
+                value={formData.name}
                 onChange={handleChange}
-                error={!!errors.email}
-                helperText={errors.email}
+                error={!!errors.name}
+                helperText={errors.name}
               />
-              <TextField
-                margin="normal"
-                required
+            )}
+            <TextField
+              margin="normal"
+              fullWidth
+              label="Email"
+              name="email"
+              value={formData.email}
+              onChange={handleChange}
+              error={!!errors.email}
+              helperText={errors.email}
+            />
+            <TextField
+              margin="normal"
+              fullWidth
+              label="Password"
+              name="password"
+              type="password"
+              value={formData.password}
+              onChange={handleChange}
+              error={!!errors.password}
+              helperText={errors.password}
+            />
+
+            {!isSignUp && (
+              <Link href="#" variant="body2" sx={{ display: 'block', mt: 1, mb: 2 }}>
+                Forgot Password?
+              </Link>
+            )}
+
+            <Box display="flex" justifyContent="space-between" mt={2}>
+              <Button
+                type="submit"
+                variant="contained"
                 fullWidth
-                name="password"
-                label="Password"
-                type="password"
-                id="password"
-                autoComplete={isSignUp ? 'new-password' : 'current-password'}
-                value={formData.password}
-                onChange={handleChange}
-                error={!!errors.password}
-                helperText={errors.password}
-              />
-              <Button type="submit" fullWidth variant="contained" sx={{ mt: 3 }}>
+                sx={{
+                  backgroundColor: '#6c63ff',
+                  color: '#fff',
+                  mr: 1,
+                  '&:hover': { backgroundColor: '#5a52d4' },
+                }}
+              >
                 {isSignUp ? 'Sign Up' : 'Sign In'}
               </Button>
-              <Button fullWidth variant="text" onClick={toggleMode} sx={{ mt: 1 }}>
-                {isSignUp
-                  ? 'Already have an account? Sign In'
-                  : "Don't have an account? Sign Up"}
-              </Button>
+              {!isSignUp && (
+                <Button
+                  variant="outlined"
+                  fullWidth
+                  onClick={() => setFormData({ email: '', password: '' })}
+                >
+                  Cancel
+                </Button>
+              )}
             </Box>
+
+            <Box mt={2} textAlign="center">
+              <Typography variant="body2">
+                {isSignUp ? 'Already registered?' : 'Not Registered?'}{' '}
+                <Link component="button" onClick={toggleMode}>
+                  {isSignUp ? 'Sign In' : 'Sign Up'}
+                </Link>
+              </Typography>
+            </Box>
+
+            <Divider sx={{ my: 2 }}>Or continue with</Divider>
+
+            <Button
+              variant="outlined"
+              fullWidth
+              startIcon={<GoogleIcon />}
+              sx={{
+                textTransform: 'none',
+                backgroundColor: '#fff',
+                borderColor: '#ddd',
+                '&:hover': {
+                  backgroundColor: '#f1f1f1',
+                },
+              }}
+            >
+              Sign In With Google
+            </Button>
           </Box>
-        </Grid>
+        </Paper>
       </Grid>
     </>
   );

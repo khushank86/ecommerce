@@ -1,21 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  TextField,
-  Button,
-  Typography,
-  Box,
-  CircularProgress,
-  Card,
-  CardContent,
-  CardMedia,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
-  IconButton
+  TextField, Button, Typography, Box, CircularProgress, Card,
+  CardContent, CardMedia, Dialog, DialogTitle, DialogContent,
+  DialogContentText, DialogActions, IconButton, MenuItem
 } from '@mui/material';
-import { PlusCircle, Trash2, ShoppingCart, CheckCircle2, XCircle } from 'lucide-react';
+import {
+  PlusCircle, Trash2, ShoppingCart, CheckCircle2, XCircle
+} from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 const ProductPage = () => {
@@ -27,7 +18,9 @@ const ProductPage = () => {
     name: '',
     tagline: '',
     description: '',
-    image: ''
+    image: '',
+    category: '',
+    price: ''
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
@@ -49,6 +42,8 @@ const ProductPage = () => {
     } else if (!/^https?:\/\/.+\.(jpg|jpeg|png|webp|avif|gif|svg)$/.test(formData.image)) {
       temp.image = 'Invalid image URL';
     }
+    if (!formData.category.trim()) temp.category = 'Category is required';
+    if (!formData.price || isNaN(formData.price) || formData.price <= 0) temp.price = 'Valid price is required';
     setErrors(temp);
     return Object.keys(temp).length === 0;
   };
@@ -58,7 +53,6 @@ const ProductPage = () => {
     setErrors({ ...errors, [e.target.name]: '' });
   };
 
-  // Fetch product data if editing
   const fetchProductById = useCallback(async () => {
     if (!isEdit) return;
     if (!token) {
@@ -70,9 +64,7 @@ const ProductPage = () => {
     setLoading(true);
     try {
       const res = await fetch(`http://localhost:5000/products/${id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       if (res.status === 401 || res.status === 403) {
@@ -87,7 +79,6 @@ const ProductPage = () => {
       setFormData(data[0] || {});
     } catch (err) {
       console.error('Fetch failed:', err);
-      //alert('An error occurred. Please try again later.');
     } finally {
       setLoading(false);
     }
@@ -133,9 +124,7 @@ const ProductPage = () => {
     try {
       const res = await fetch(`http://localhost:5000/products/${productToDelete}`, {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       if (!res.ok) throw new Error('Unauthorized');
@@ -176,8 +165,15 @@ const ProductPage = () => {
           <Box component="form" onSubmit={handleSubmit}>
             <TextField fullWidth label="Product Name" name="name" value={formData.name} onChange={handleChange} margin="normal" error={!!errors.name} helperText={errors.name} />
             <TextField fullWidth label="Tagline" name="tagline" value={formData.tagline} onChange={handleChange} margin="normal" error={!!errors.tagline} helperText={errors.tagline} />
-            <TextField fullWidth label="Description" name="description" value={formData.description} onChange={handleChange} multiline rows={4} margin="normal" error={!!errors.description} helperText={errors.description} />
+            <TextField fullWidth label="Description" name="description" value={formData.description} onChange={handleChange} multiline rows={3} margin="normal" error={!!errors.description} helperText={errors.description} />
             <TextField fullWidth label="Image URL" name="image" value={formData.image} onChange={handleChange} margin="normal" error={!!errors.image} helperText={errors.image} />
+            <TextField select fullWidth label="Category" name="category" value={formData.category} onChange={handleChange} margin="normal" error={!!errors.category} helperText={errors.category}>
+              <MenuItem value="">Select Category</MenuItem>
+              <MenuItem value="Electronics">Electronics</MenuItem>
+              <MenuItem value="snack">Snack</MenuItem>
+              <MenuItem value="utilities">Utilities</MenuItem>
+            </TextField>
+            <TextField fullWidth label="Price (₹)" name="price" type="number" value={formData.price} onChange={handleChange} margin="normal" error={!!errors.price} helperText={errors.price} />
             <Button type="submit" variant="contained" fullWidth sx={{ mt: 2 }}>
               {isEdit ? 'Update Product' : 'Add Product'}
             </Button>
@@ -191,26 +187,21 @@ const ProductPage = () => {
             )}
           </Box>
         </CardContent>
+
         {formData.image && (
           <CardMedia component="img" height="200" image={formData.image} alt={formData.name} sx={{ objectFit: 'contain', mt: 2 }} />
         )}
       </Card>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Dialog */}
       <Dialog open={openConfirm} onClose={() => setOpenConfirm(false)}>
         <DialogTitle>Confirm Deletion</DialogTitle>
         <DialogContent>
-          <DialogContentText>
-            Are you sure you want to delete this product?
-          </DialogContentText>
+          <DialogContentText>Are you sure you want to delete this product?</DialogContentText>
         </DialogContent>
         <DialogActions>
-          <IconButton onClick={() => setOpenConfirm(false)} color="primary">
-            <XCircle />
-          </IconButton>
-          <IconButton onClick={confirmDelete} color="error">
-            <CheckCircle2 />
-          </IconButton>
+          <IconButton onClick={() => setOpenConfirm(false)} color="primary"><XCircle /></IconButton>
+          <IconButton onClick={confirmDelete} color="error"><CheckCircle2 /></IconButton>
         </DialogActions>
       </Dialog>
 
@@ -221,6 +212,8 @@ const ProductPage = () => {
           <Typography>Name: {cartData.name}</Typography>
           <Typography>Tagline: {cartData.tagline}</Typography>
           <Typography>Description: {cartData.description}</Typography>
+          <Typography>Category: {cartData.category}</Typography>
+          <Typography>Price: ₹{cartData.price}</Typography>
           <Typography>Payment Mode: {cartData.paymentMode}</Typography>
           {cartData.image && (
             <CardMedia component="img" height="140" image={cartData.image} alt={cartData.name} sx={{ objectFit: 'contain', mt: 2 }} />
