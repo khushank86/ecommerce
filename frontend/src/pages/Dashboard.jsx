@@ -16,6 +16,7 @@ import {
   Rating,
   TextField,
   Button,
+  Container,
 } from "@mui/material";
 import {
   ShoppingCart,
@@ -32,14 +33,14 @@ import "slick-carousel/slick/slick-theme.css";
 import { AddBox, AssignmentTurnedIn } from "@mui/icons-material";
 import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos";
 import ArrowBackIosNewIcon from "@mui/icons-material/ArrowBackIosNew";
-import DialogTitle from '@mui/material/DialogTitle';
-import Dialog from '@mui/material/Dialog';
-import CloseIcon from '@mui/icons-material/Close';
-import Autocomplete from '@mui/material/Autocomplete';
+import DialogTitle from "@mui/material/DialogTitle";
+import Dialog from "@mui/material/Dialog";
+import CloseIcon from "@mui/icons-material/Close";
+import Autocomplete from "@mui/material/Autocomplete";
 import Card from "@mui/material/Card";
 import CardContent from "@mui/material/CardContent";
 import CardMedia from "@mui/material/CardMedia";
-import Tooltip from '@mui/material/Tooltip';
+import Tooltip from "@mui/material/Tooltip";
 
 const NextArrow = (props) => {
   const { onClick } = props;
@@ -94,26 +95,6 @@ const PrevArrow = (props) => {
 };
 
 const Dashboard = () => {
-  // Fetch wishlist products from backend
-  const fetchWishlistProducts = async (wishlistIds) => {
-    if (!Array.isArray(wishlistIds) || wishlistIds.length === 0) {
-      setWishlistProducts([]);
-      setWishlistCount(0);
-      return;
-    }
-    try {
-      
-      const res = await fetch(`http://localhost:5000/products/by-ids?ids=${wishlistIds.join(",")}`);
-      const data = await res.json();
-      setWishlistProducts(Array.isArray(data) ? data : []);
-      setWishlistCount(Array.isArray(data) ? data.length : 0);
-    } catch {
-      setWishlistProducts([]);
-      setWishlistCount(0);
-    }
-  };
-
-  //const[userName, setUserName]= useState('khushank'); 
   const [isOpen, setOpen] = useState(false);
   const [products, setProducts] = useState([]);
   const [anchorEl, setAnchorEl] = useState(null);
@@ -125,7 +106,6 @@ const Dashboard = () => {
   const [category, setCategory] = useState("All");
   const [wishlist, setWishlist] = useState([]);
   const [wishlistCount, setWishlistCount] = useState(0);
-  
   const [wishlistProducts, setWishlistProducts] = useState([]);
   const [addProductForm, setAddProductForm] = useState({
     name: "",
@@ -135,7 +115,6 @@ const Dashboard = () => {
     category: "",
     price: "",
   });
-  
   const [expandedProduct, setExpandedProduct] = useState(null);
   const [productModalOpen, setProductModalOpen] = useState(false);
   const [drawerTab, setDrawerTab] = useState("categories");
@@ -145,8 +124,35 @@ const Dashboard = () => {
   const [countries, setCountries] = useState([]);
   const [locationOpen, setLocationOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [currentSearchTerm, setCurrentSearchTerm] = useState("");
 
-  
+  const handleClose = () => {
+    setOpen(false);
+  };
+  const open = Boolean(anchorEl);
+  const navigate = useNavigate();
+  const itemsPerPage = 12;
+  const bannerImages = ["/banner1.jpg", "/banner2.jpg", "/banner3.jpg"];
+
+  const fetchWishlistProducts = async (wishlistIds) => {
+    if (!Array.isArray(wishlistIds) || wishlistIds.length === 0) {
+      setWishlistProducts([]);
+      setWishlistCount(0);
+      return;
+    }
+    try {
+      const res = await fetch(
+        `http://localhost:5000/products/by-ids?ids=${wishlistIds.join(",")}`
+      );
+      const data = await res.json();
+      setWishlistProducts(Array.isArray(data) ? data : []);
+      setWishlistCount(Array.isArray(data) ? data.length : 0);
+    } catch {
+      setWishlistProducts([]);
+      setWishlistCount(0);
+    }
+  };
+
   useEffect(() => {
     const handleStorage = (e) => {
       if (e.key === "wishlist") {
@@ -156,9 +162,10 @@ const Dashboard = () => {
       }
     };
     window.addEventListener("storage", handleStorage);
-    
+
     const interval = setInterval(() => {
-      const currentWishlist = JSON.parse(localStorage.getItem("wishlist")) || [];
+      const currentWishlist =
+        JSON.parse(localStorage.getItem("wishlist")) || [];
       if (JSON.stringify(currentWishlist) !== JSON.stringify(wishlist)) {
         setWishlist(currentWishlist);
         fetchWishlistProducts(currentWishlist);
@@ -170,14 +177,7 @@ const Dashboard = () => {
     };
   }, [wishlist]);
 
-  const handleClose = () => {setOpen(false);};
-  const open = Boolean(anchorEl);
-  const navigate = useNavigate();
-  const itemsPerPage = 12;
-  const bannerImages = ["/banner1.jpg", "/banner2.jpg", "/banner3.jpg"];
-
   useEffect(() => {
-    
     const fetchCategories = async () => {
       try {
         const res = await fetch("http://localhost:5000/categories");
@@ -204,8 +204,7 @@ const Dashboard = () => {
         setLoading(true);
         const queryParams = new URLSearchParams();
         if (category !== "All") queryParams.append("category", category);
-        // Add search term to query params if present
-        if (searchTerm.trim()) queryParams.append("search", searchTerm.trim());
+        if (currentSearchTerm.trim()) queryParams.append("search", currentSearchTerm.trim());
         const res = await fetch(
           `http://localhost:5000/products?${queryParams.toString()}`,
           {
@@ -221,9 +220,8 @@ const Dashboard = () => {
       }
     };
     fetchProducts();
-  }, [category, searchTerm]);
+  }, [category, currentSearchTerm]);
 
-  
   useEffect(() => {
     fetch("https://countriesnow.space/api/v0.1/countries")
       .then((res) => res.json())
@@ -244,43 +242,49 @@ const Dashboard = () => {
     localStorage.setItem("cart", JSON.stringify(updatedCart));
     setCartCount(updatedCart.length);
     toast.success(`${product.name} added to cart`);
+    handleProductModalClose();
   };
 
-  
   const toggleWishlist = async (productId) => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem("token");
+    if (!token) {
+      toast.error("Please log in to manage your wishlist.");
+      navigate("/login");
+      return;
+    }
+
     let updatedWishlist;
     if (wishlist.includes(productId)) {
-      
       try {
-        await fetch('http://localhost:5000/wishlist/' + productId, {
-          method: 'DELETE',
+        await fetch(`http://localhost:5000/wishlist/${productId}`, {
+          method: "DELETE",
           headers: { Authorization: `Bearer ${token}` },
         });
-        toast.info('Removed from wishlist');
-        updatedWishlist = wishlist.filter(id => id !== productId);
+        toast.info("Removed from wishlist");
+        updatedWishlist = wishlist.filter((id) => id !== productId);
         setWishlist(updatedWishlist);
-        localStorage.setItem('wishlist', JSON.stringify(updatedWishlist));
-      } catch {
-        toast.error('Failed to remove from wishlist');
+        localStorage.setItem("wishlist", JSON.stringify(updatedWishlist));
+      } catch (err) {
+        console.error("Failed to remove from wishlist:", err);
+        toast.error("Failed to remove from wishlist");
       }
     } else {
-      
       try {
-        await fetch('http://localhost:5000/wishlist', {
-          method: 'POST',
+        await fetch("http://localhost:5000/wishlist", {
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ productId }),
         });
-        toast.success('Added to wishlist');
+        toast.success("Added to wishlist");
         updatedWishlist = [...wishlist, productId];
         setWishlist(updatedWishlist);
-        localStorage.setItem('wishlist', JSON.stringify(updatedWishlist));
-      } catch {
-        toast.error('Failed to add to wishlist');
+        localStorage.setItem("wishlist", JSON.stringify(updatedWishlist));
+      } catch (err) {
+        console.error("Failed to add to wishlist:", err);
+        toast.error("Failed to add to wishlist");
       }
     }
   };
@@ -291,6 +295,10 @@ const Dashboard = () => {
   const handleLogout = () => {
     localStorage.removeItem("user");
     localStorage.removeItem("token");
+    localStorage.removeItem("cart");
+    localStorage.removeItem("wishlist");
+    setCartCount(0);
+    setWishlistCount(0);
     toast.info("Logging out...");
     navigate("/login");
   };
@@ -301,7 +309,6 @@ const Dashboard = () => {
 
   const handleAddProductSubmit = async (e) => {
     e.preventDefault();
-    // Basic validation
     if (
       !addProductForm.name ||
       !addProductForm.tagline ||
@@ -315,6 +322,11 @@ const Dashboard = () => {
     }
     try {
       const token = localStorage.getItem("token");
+      if (!token) {
+        toast.error("Authentication required to add products.");
+        navigate("/login");
+        return;
+      }
       const res = await fetch("http://localhost:5000/products", {
         method: "POST",
         headers: {
@@ -338,8 +350,9 @@ const Dashboard = () => {
         category: "",
         price: "",
       });
-      
+      setCategory(category);
     } catch (err) {
+      console.error("Error adding product:", err);
       toast.error("Something went wrong");
     }
   };
@@ -353,8 +366,12 @@ const Dashboard = () => {
       return;
     }
     try {
-      
       const token = localStorage.getItem("token");
+      if (!token) {
+        toast.error("Authentication required to add categories.");
+        navigate("/login");
+        return;
+      }
       await fetch("http://localhost:5000/products", {
         method: "POST",
         headers: {
@@ -372,11 +389,11 @@ const Dashboard = () => {
       });
       setNewCategory("");
       toast.success("Category added! Reloading...");
-      
       const res = await fetch("http://localhost:5000/categories");
       const data = await res.json();
       setCategories(["Home", ...data]);
     } catch (err) {
+      console.error("Failed to add category:", err);
       toast.error("Failed to add category");
     }
   };
@@ -402,40 +419,77 @@ const Dashboard = () => {
     ],
   };
 
-  const handleOrderNow = (product) => {
-    handleAddToCart(product);
-    toast.success(`${product.name} ordered!`);
-    navigate("/cart");
+  const handleOrderNow = async (product) => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      toast.error("Please log in to place an order.");
+      navigate("/login");
+      return;
+    }
+
+    try {
+      const orderItem = {
+        productId: product.id,
+        name: product.name,
+        image: product.image,
+        qty: 1,
+        price: product.price,
+      };
+
+      const response = await fetch("http://localhost:5000/orders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          items: [orderItem],
+          total: product.price,
+          shippedTo: user.name || user.email || "User",
+          status: "Pending",
+          orderDate: new Date().toLocaleDateString(),
+          deliveryDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toLocaleDateString(),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to place order.");
+      }
+
+      toast.success(`${product.name} ordered successfully!`);
+      handleProductModalClose();
+      navigate("/order");
+    } catch (error) {
+      console.error("Error placing order:", error);
+      toast.error(error.message || "Could not place order.");
+    }
   };
 
-  
   const handleProductClick = (product) => {
     setExpandedProduct(product);
     setProductModalOpen(true);
   };
 
-  
   const handleProductModalClose = () => {
     setProductModalOpen(false);
     setExpandedProduct(null);
   };
 
-  
   function getCategoryImage(category) {
     const images = {
-      Fashion: '/fashion.png',
-      Electronics: '/electronics.png',
-      Bags: '/bags.png',
-      Footwear: '/footwear.png',
-      Groceries: '/snack.png',
-      Snack: '/snack.png',
-      Utilities: '/utilities.png',
-      Beauty: '/beauty.png',
-      Wellness: '/wellness.png',
-      Jewellery: '/jewellery.png',
-      
+      Fashion: "/fashion.png",
+      Electronics: "/electronics.png",
+      Bags: "/bags.png",
+      Footwear: "/footwear.png",
+      Groceries: "/snack.png",
+      Snack: "/snack.png",
+      Utilities: "/utilities.png",
+      Beauty: "/beauty.png",
+      Wellness: "/wellness.png",
+      Jewellery: "/jewellery.png",
     };
-    return images[category] || '/categories/default.png';
+    return images[category] || "/categories/default.png";
   }
 
   return (
@@ -461,22 +515,30 @@ const Dashboard = () => {
             gap: 2,
           }}
         >
-          
-          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 220 }}>
-            <IconButton edge="start" onClick={() => setDrawerOpen(true)} sx={{ mr: 1 }}>
+          <Box
+            sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 220 }}
+          >
+            <IconButton
+              edge="start"
+              onClick={() => setDrawerOpen(true)}
+              sx={{ mr: 1 }}
+            >
               <MenuIcon />
             </IconButton>
-            <img src="/newlogo.png" alt="logo" style={{ width: 70, marginRight: 8 }} />
+            <img
+              src="/newlogo.png"
+              alt="logo"
+              style={{ width: 70, marginRight: 8 }}
+            />
             <Typography variant="h6" fontWeight="bold" sx={{ letterSpacing: 1, fontSize: 22 }}>
               NewIndia Shop
             </Typography>
           </Box>
 
-      
           <Box
             sx={{
-              display: 'flex',
-              alignItems: 'center',
+              display: "flex",
+              alignItems: "center",
               gap: 2,
               flex: 1,
               maxWidth: 600,
@@ -484,35 +546,38 @@ const Dashboard = () => {
               mx: 3,
             }}
           >
-            
-            <Box sx={{ position: 'relative', minWidth: 180 }}>
+            <Box sx={{ position: "relative", minWidth: 180 }}>
               <TextField
                 placeholder="Search for location..."
-                label={<span style={{ fontWeight: 500, color: '#666', letterSpacing: 0.2 }}>Your Location</span>}
+                label={
+                  <span style={{ fontWeight: 500, color: "#666", letterSpacing: 0.2 }}>
+                    Your Location
+                  </span>
+                }
                 value={location}
                 size="small"
                 sx={{
                   width: 180,
-                  background: '#fff',
+                  background: "#fff",
                   borderRadius: 1,
-                  cursor: 'pointer',
-                  '& .MuiOutlinedInput-root': {
+                  cursor: "pointer",
+                  "& .MuiOutlinedInput-root": {
                     fontWeight: 500,
-                    color: '#222',
-                    '& input': {
+                    color: "#222",
+                    "& input": {
                       fontWeight: 500,
-                      color: '#222',
+                      color: "#222",
                     },
-                    '&:hover .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2',
+                    "&:hover .MuiOutlinedInput-notchedOutline": {
+                      borderColor: "#1976d2",
                     },
-                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                      borderColor: '#1976d2',
-                      boxShadow: '0 0 0 2px rgba(25, 118, 210, 0.2)',
+                    "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                      borderColor: "#1976d2",
+                      boxShadow: "0 0 0 2px rgba(25, 118, 210, 0.2)",
                     },
                   },
-                  '& .MuiInputBase-input::placeholder': {
-                    color: '#222',
+                  "& .MuiInputBase-input::placeholder": {
+                    color: "#222",
                     opacity: 1,
                     fontWeight: 500,
                   },
@@ -521,7 +586,7 @@ const Dashboard = () => {
                 InputProps={{
                   style: {
                     fontWeight: 500,
-                    color: '#222',
+                    color: "#222",
                   },
                 }}
                 onClick={() => setLocationOpen((prev) => !prev)}
@@ -529,29 +594,33 @@ const Dashboard = () => {
               {locationOpen && (
                 <Box
                   sx={{
-                    position: 'absolute',
+                    position: "absolute",
                     top: 44,
                     left: 0,
                     width: 320,
                     maxHeight: 340,
-                    bgcolor: '#fff',
-                    border: '1px solid #e0e0e0',
+                    bgcolor: "#fff",
+                    border: "1px solid #e0e0e0",
                     borderRadius: 2,
                     boxShadow: 4,
                     zIndex: 1302,
-                    overflowY: 'auto',
+                    overflowY: "auto",
                     p: 0,
                   }}
                 >
                   <Box sx={{ px: 2, pt: 2, pb: 1 }}>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#1976d2', mb: 0.5 }}>
+                    <Typography
+                      variant="subtitle2"
+                      sx={{ fontWeight: 600, color: "#1976d2", mb: 0.5 }}
+                    >
                       Choose your Delivery Location
                     </Typography>
-                    <Typography variant="caption" sx={{ color: 'text.secondary', mb: 1 }}>
-                      Enter your address and we will specify the offer for your area.
+                    <Typography variant="caption" sx={{ color: "text.secondary", mb: 1 }}>
+                      Enter your address and we will specify the offer for your
+                      area.
                     </Typography>
                   </Box>
-                  <Box sx={{ maxHeight: 260, overflowY: 'auto', px: 2, pb: 2 }}>
+                  <Box sx={{ maxHeight: 260, overflowY: "auto", px: 2, pb: 2 }}>
                     {countries.map((country) => (
                       <Box
                         key={country}
@@ -559,11 +628,11 @@ const Dashboard = () => {
                           py: 1,
                           px: 1.5,
                           borderRadius: 1,
-                          cursor: 'pointer',
-                          '&:hover': { bgcolor: '#e3f2fd' },
+                          cursor: "pointer",
+                          "&:hover": { bgcolor: "#e3f2fd" },
                           fontWeight: location === country ? 700 : 400,
-                          color: location === country ? '#1976d2' : 'inherit',
-                          background: location === country ? '#e3f2fd' : 'none',
+                          color: location === country ? "#1976d2" : "inherit",
+                          background: location === country ? "#e3f2fd" : "none",
                         }}
                         onClick={() => {
                           setLocation(country);
@@ -582,27 +651,27 @@ const Dashboard = () => {
               placeholder="Search for products..."
               size="small"
               value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
+              onChange={(e) => setSearchTerm(e.target.value)}
               sx={{
                 flex: 1,
                 minWidth: 180,
-                background: '#fff',
+                background: "#fff",
                 borderRadius: 1,
-                '& .MuiOutlinedInput-root': {
-                  '&:hover .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#1976d2',
+                "& .MuiOutlinedInput-root": {
+                  "&:hover .MuiOutlinedInput-notchedOutline": {
+                    borderColor: "#1976d2",
                   },
-                  '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                    borderColor: '#1976d2',
-                    boxShadow: '0 0 0 2px rgba(25, 118, 210, 0.2)',
+                  "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                    borderColor: "#1976d2",
+                    boxShadow: "0 0 0 2px rgba(25, 118, 210, 0.2)",
                   },
-                  '& input': {
+                  "& input": {
                     fontWeight: 500,
-                    color: '#222',
+                    color: "#222",
                   },
                 },
-                '& .MuiInputBase-input::placeholder': {
-                  color: '#222',
+                "& .MuiInputBase-input::placeholder": {
+                  color: "#222",
                   opacity: 1,
                   fontWeight: 500,
                 },
@@ -610,26 +679,28 @@ const Dashboard = () => {
               InputProps={{
                 style: {
                   fontWeight: 500,
-                  color: '#222',
+                  color: "#222",
                 },
               }}
-              onKeyDown={e => {
+              onKeyDown={(e) => {
                 if (e.key === "Enter") {
-                  setSearchTerm(e.target.value);
+                  setCurrentSearchTerm(searchTerm);
+                  setPage(1);
                 }
               }}
             />
           </Box>
 
-          
-          <Box sx={{ display: "flex", alignItems: "center", gap: 2, minWidth: 220, justifyContent: 'flex-end' }}>
+          <Box
+            sx={{ display: "flex", alignItems: "center", gap: 2, minWidth: 220, justifyContent: 'flex-end' }}
+          >
             <Tooltip title="Delivery" arrow>
               <IconButton sx={{ p: 1.2 }}>
                 <Truck size={20} />
               </IconButton>
             </Tooltip>
             <Tooltip title="Wishlist" arrow>
-              <IconButton onClick={() =>  navigate("/wishlist")} sx={{ p: 1.2 }}>
+              <IconButton onClick={() => navigate("/wishlist")} sx={{ p: 1.2 }}>
                 <Badge badgeContent={wishlistCount} color="error">
                   <Heart />
                 </Badge>
@@ -654,16 +725,18 @@ const Dashboard = () => {
                   px: 1.5,
                   py: 0.5,
                   borderRadius: 2,
-                  transition: 'background 0.2s',
-                  '&:hover': { background: '#f5f5f5' },
+                  transition: "background 0.2s",
+                  "&:hover": { background: "#f5f5f5" },
                 }}
               >
-                <Avatar sx={{ width: 32, height: 32, bgcolor: '#1976d2', color: '#fff', fontWeight: 700 }}>
+                <Avatar
+                  sx={{ width: 32, height: 32, bgcolor: "#1976d2", color: "#fff", fontWeight: 700 }}
+                >
                   {user.name
                     ? user.name[0].toUpperCase()
                     : user.email[0].toUpperCase()}
                 </Avatar>
-                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', ml: 0.5 }}>
+                <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start", ml: 0.5 }}>
                   <Typography variant="body2" fontWeight="bold" sx={{ lineHeight: 1.1 }}>
                     {user.name || user.email}
                   </Typography>
@@ -744,7 +817,7 @@ const Dashboard = () => {
             <MenuItem
               onClick={() => {
                 handleUserMenuClose();
-                navigate("/orders");
+                navigate("/order");
               }}
             >
               <span style={{ marginRight: 8 }}>📦</span> Orders
@@ -868,7 +941,6 @@ const Dashboard = () => {
                   </ListItem>
                 ))}
 
-              
               {user && user.role === "superadmin" && (
                 <ListItem sx={{ mt: 2 }}>
                   <ListItemButton
@@ -933,6 +1005,8 @@ const Dashboard = () => {
               } else {
                 setCategory(item);
                 setPage(1);
+                setCurrentSearchTerm("");
+                setSearchTerm("");
               }
             }}
           >
@@ -941,6 +1015,7 @@ const Dashboard = () => {
         ))}
       </Box>
 
+      {/* Main Banner Slider - Reverted to original properties */}
       <Box sx={{ mt: 2, mb: 4 }}>
         <Slider
           dots
@@ -959,6 +1034,7 @@ const Dashboard = () => {
                 style={{
                   width: "100%",
                   height: "400px",
+                //  objectFit: "cover",
                   borderRadius: "12px",
                   boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
                 }}
@@ -967,7 +1043,7 @@ const Dashboard = () => {
           ))}
         </Slider>
       </Box>
-      
+
       <Box sx={{ px: { xs: 1, sm: 4, md: 8 }, py: 2, mt: 0 }}>
         <Typography variant="h6" fontWeight="bold" sx={{ mb: 2, letterSpacing: 1, color: '#1976d2' }}>
           FEATURED CATEGORIES
@@ -990,6 +1066,8 @@ const Dashboard = () => {
               onClick={() => {
                 setCategory(cat);
                 setPage(1);
+                setCurrentSearchTerm("");
+                setSearchTerm("");
               }}
             >
               <Box
@@ -1066,151 +1144,195 @@ const Dashboard = () => {
             ))}
           </Box>
         ) : (
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                sm: "1fr 1fr",
-                md: "1fr 1fr 1fr",
-                lg: "1fr 1fr 1fr 1fr"
-              },
-              gap: 3,
-              justifyItems: "center",
-            }}
-          >
-            {paginatedProducts.map((product) => (
-              <Card
-                key={product.id}
+          <>
+            {currentSearchTerm.trim() && products.length === 0 ? (
+              <Box sx={{ textAlign: 'center', py: 8 }}>
+                <Typography variant="h6" color="text.secondary" sx={{ mb: 2 }}>
+                  😔 No products found for "{currentSearchTerm}".
+                </Typography>
+                <Typography variant="body1" color="text.secondary">
+                  Try adjusting your search term or browsing other categories.
+                </Typography>
+                <Button variant="outlined" sx={{ mt: 3 }} onClick={() => {
+                  setSearchTerm("");
+                  setCurrentSearchTerm("");
+                  setCategory("All");
+                  setPage(1);
+                }}>
+                  Clear Search & View All Products
+                </Button>
+              </Box>
+            ) : (
+              <Box
                 sx={{
-                  width: 260,
-                  minHeight: 340,
-                  borderRadius: 2,
-                  boxShadow: 2,
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  transition: "all 0.3s",
-                  cursor: "pointer",
-                  position: "relative",
-                  bgcolor: "#fff",
-                  '&:hover': {
-                    transform: 'scale(1.04)',
-                    boxShadow: '0 8px 32px rgba(25,118,210,0.18)',
+                  display: "grid",
+                  gridTemplateColumns: {
+                    xs: "1fr",
+                    sm: "1fr 1fr",
+                    md: "1fr 1fr 1fr",
+                    lg: "1fr 1fr 1fr 1fr",
                   },
+                  gap: 3,
+                  justifyItems: "center",
                 }}
-                onClick={() => handleProductClick(product)}
               >
-                <CardMedia
-                  component="img"
-                  image={product.image}
-                  alt={product.name}
-                  sx={{
-                    width: "100%",
-                    height: 180,
-                    objectFit: "contain",
-                    borderRadius: 2,
-                    mt: 1,
-                  }}
-                />
-                <CardContent sx={{ width: "100%", textAlign: "center", p: 2 }}>
-                  <Typography
-                    variant="subtitle1"
-                    fontWeight="bold"
+                {paginatedProducts.map((product) => (
+                  <Card
+                    key={product.id}
                     sx={{
-                      transition: "color 0.2s",
-                      "&:hover": { color: "#1976d2" },
-                    }}
-                  >
-                    {product.name}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                    {product.tagline}
-                  </Typography>
-                  <Typography variant="h6" color="green">
-                    ₹{product.price || 1500}
-                  </Typography>
-                  <Rating value={4.3} precision={0.5} size="small" readOnly />
-                </CardContent>
-                {user && user.email && (
-                  <Box
-                    sx={{
-                      position: "absolute",
-                      top: 12,
-                      right: 12,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 1,
-                      background: "rgba(255,255,255,0.92)",
+                      width: 260,
+                      minHeight: 340,
                       borderRadius: 2,
                       boxShadow: 2,
-                      p: 0.5,
+                      display: "flex",
+                      flexDirection: "column",
                       alignItems: "center",
-                      zIndex: 2,
+                      transition: "all 0.3s",
+                      cursor: "pointer",
+                      position: "relative",
+                      bgcolor: "#fff",
+                      "&:hover": {
+                        transform: "scale(1.04)",
+                        boxShadow: "0 8px 32px rgba(25,118,210,0.18)",
+                      },
                     }}
+                    onClick={() => handleProductClick(product)}
                   >
-                    <Tooltip title="Add to Cart" arrow>
-                      <IconButton
+                    {/* Image with Enhanced Hover Effect */}
+                    <CardMedia
+                      component="img"
+                      image={product.image}
+                      alt={product.name}
+                      sx={{
+                        width: "100%",
+                        height: 180,
+                        objectFit: "contain",
+                        borderRadius: 2,
+                        mt: 1,
+                        transition: "transform 0.3s ease-in-out, filter 0.3s ease-in-out, box-shadow 0.3s ease-in-out",
+                        "&:hover": {
+                          transform: "scale(1.1)", // More zoom
+                          filter: "brightness(1.1) contrast(1.1)", // More pop
+                          boxShadow: "0 15px 45px rgba(0,0,0,0.3)", // Stronger, more lifted shadow
+                        },
+                      }}
+                    />
+                    <CardContent sx={{ width: "100%", textAlign: "center", p: 2 }}>
+                      <Typography
+                        variant="subtitle1"
+                        fontWeight="bold"
                         sx={{
-                          bgcolor: "#1976d2",
-                          color: "white",
-                          mb: 1,
-                          "&:hover": {
-                            bgcolor: "#115293",
-                            transform: "scale(1.15)",
-                          },
-                          p: 0.5,
-                          transition: "all 0.2s",
+                          transition: "color 0.2s",
+                          "&:hover": { color: "#1976d2" },
                         }}
-                        onClick={e => { e.stopPropagation(); handleAddToCart(product); }}
                       >
-                        <ShoppingCart size={18} />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={wishlist.includes(product.id) ? "Remove from Wishlist" : "Add to Wishlist"} arrow>
-                      <IconButton
+                        {product.name}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                        {product.tagline}
+                      </Typography>
+                      <Typography variant="h6" color="green">
+                        ₹{product.price || 1500}
+                      </Typography>
+                      <Rating value={4.3} precision={0.5} size="small" readOnly />
+                    </CardContent>
+                    {user && user.email && (
+                      <Box
                         sx={{
-                          bgcolor: "white",
-                          color: wishlist.includes(product.id) ? "red" : "#555",
-                          border: "1px solid #1976d2",
-                          "&:hover": {
-                            bgcolor: "#f5f5f5",
-                            color: "#1976d2",
-                            transform: "scale(1.15)",
-                          },
+                          position: "absolute",
+                          top: 12,
+                          right: 12,
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 1,
+                          background: "rgba(255,255,255,0.92)",
+                          borderRadius: 2,
+                          boxShadow: 2,
                           p: 0.5,
-                          transition: "all 0.2s",
+                          alignItems: "center",
+                          zIndex: 2,
                         }}
-                        onClick={e => { e.stopPropagation(); toggleWishlist(product.id); }}
                       >
-                        <Heart size={20} />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title="Order Now" arrow>
-                      <IconButton
-                        sx={{
-                          bgcolor: "#fff",
-                          color: "#1976d2",
-                          border: "1px solid #1976d2",
-                          mt: 1,
-                          "&:hover": {
-                            bgcolor: "#e3f2fd",
-                            color: "#115293",
-                            transform: "scale(1.15)",
-                          },
-                          p: 0.5,
-                          transition: "all 0.2s",
-                        }}
-                        onClick={e => { e.stopPropagation(); handleOrderNow(product); }}
-                      >
-                        <AssignmentTurnedIn fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                )}
-              </Card>
-            ))}
-          </Box>
+                        <Tooltip title="Add to Cart" arrow>
+                          <IconButton
+                            sx={{
+                              bgcolor: "#1976d2",
+                              color: "white",
+                              mb: 1,
+                              "&:hover": {
+                                bgcolor: "#115293",
+                                transform: "scale(1.15)",
+                              },
+                              p: 0.5,
+                              transition: "all 0.2s",
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAddToCart(product);
+                            }}
+                          >
+                            <ShoppingCart size={18} />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip
+                          title={
+                            wishlist.includes(product.id)
+                              ? "Remove from Wishlist"
+                              : "Add to Wishlist"
+                          }
+                          arrow
+                        >
+                          <IconButton
+                            sx={{
+                              bgcolor: "white",
+                              color: wishlist.includes(product.id) ? "red" : "#555",
+                              border: "1px solid #1976d2",
+                              "&:hover": {
+                                bgcolor: "#f5f5f5",
+                                color: "#1976d2",
+                                transform: "scale(1.15)",
+                              },
+                              p: 0.5,
+                              transition: "all 0.2s",
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleWishlist(product.id);
+                            }}
+                          >
+                            <Heart size={20} />
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Order Now" arrow>
+                          <IconButton
+                            sx={{
+                              bgcolor: "#fff",
+                              color: "#1976d2",
+                              border: "1px solid #1976d2",
+                              mt: 1,
+                              "&:hover": {
+                                bgcolor: "#e3f2fd",
+                                color: "#115293",
+                                transform: "scale(1.15)",
+                              },
+                              p: 0.5,
+                              transition: "all 0.2s",
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOrderNow(product);
+                            }}
+                          >
+                            <AssignmentTurnedIn fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    )}
+                  </Card>
+                ))}
+              </Box>
+            )}
+          </>
         )}
       </Box>
       {/* Sleek divider for separation */}
@@ -1237,7 +1359,7 @@ const Dashboard = () => {
         />
       </Box>
 
-      {/* Banners under products */}
+      {/* Banners under products - Original properties maintained */}
       <Box
         sx={{
           display: "flex",
@@ -1600,7 +1722,7 @@ const Dashboard = () => {
                 background: '#fff',
                 boxShadow: 1,
                 borderRadius: 1,
-                color: '#1976d2',
+                color: (theme) => theme.palette.grey[700],
                 transition: 'color 0.2s, background 0.2s',
                 '&:hover': {
                   background: '#f5f5f5',
@@ -1640,7 +1762,10 @@ const Dashboard = () => {
                     color="primary"
                     size="large"
                     sx={{ fontWeight: 600, px: 4, boxShadow: 2, borderRadius: 2, transition: 'background 0.2s', '&:hover': { background: '#115293' } }}
-                    onClick={() => { handleAddToCart(expandedProduct); }}
+                    onClick={() => {
+                      handleAddToCart(expandedProduct);
+                      handleProductModalClose();
+                    }}
                   >
                     Add to Cart
                   </Button>
@@ -1649,7 +1774,10 @@ const Dashboard = () => {
                     color="primary"
                     size="large"
                     sx={{ fontWeight: 600, px: 4, borderRadius: 2, transition: 'border-color 0.2s', '&:hover': { borderColor: '#115293' } }}
-                    onClick={() => { handleOrderNow(expandedProduct); }}
+                    onClick={() => {
+                      handleOrderNow(expandedProduct);
+                      handleProductModalClose();
+                    }}
                   >
                     Order Now
                   </Button>
