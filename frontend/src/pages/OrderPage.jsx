@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
   Box, Typography, Button, Divider, Card, CardMedia, CardContent, Grid, Paper, Container, Stack,
-  CircularProgress, Alert, Accordion, AccordionSummary, AccordionDetails, Dialog, DialogTitle, DialogContent, DialogActions
+  CircularProgress, Alert, Accordion, AccordionSummary, AccordionDetails, Dialog, DialogTitle, DialogContent, DialogActions,
+  TextField, Rating, Tooltip, Select, MenuItem, FormControl, InputLabel
 } from '@mui/material';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
@@ -63,21 +63,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           borderRadius: '8px',
-          textTransform: 'none', // Keep button text as is
-        },
-        outlined: {
-          borderColor: '#ccc',
-          color: '#555',
-          '&:hover': {
-            borderColor: '#999',
-            backgroundColor: '#f0f0f0',
-          },
-        },
-        containedPrimary: {
-          backgroundColor: '#3f51b5',
-          '&:hover': {
-            backgroundColor: '#303f9f',
-          },
+          textTransform: 'none',
         },
       },
     },
@@ -86,11 +72,6 @@ const theme = createTheme({
         root: {
           borderRadius: '12px',
           boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-          transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
-          '&:hover': {
-            transform: 'translateY(-3px)',
-            boxShadow: '0 8px 30px rgba(0,0,0,0.1)',
-          },
         },
       },
     },
@@ -99,316 +80,221 @@ const theme = createTheme({
         root: {
           borderRadius: '10px',
           boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
-          transition: 'transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out',
-          '&:hover': {
-            transform: 'scale(1.005)',
-            boxShadow: '0 4px 15px rgba(0,0,0,0.08)',
-          },
         },
       },
     },
-    MuiAccordion: {
+    MuiTooltip: {
         styleOverrides: {
-            root: {
-                borderRadius: '12px',
-                boxShadow: 'none',
-                '&:before': {
-                    display: 'none',
-                },
-                '&.Mui-expanded': {
-                    margin: '0',
-                },
+            tooltip: {
+                backgroundColor: '#ffffff',
+                color: 'rgba(0, 0, 0, 0.87)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.1)',
+                fontSize: '0.875rem',
+                border: '1px solid #ddd',
+                padding: '12px',
             },
-        },
-    },
-    MuiAccordionSummary: {
-        styleOverrides: {
-            root: {
-                borderRadius: '12px',
-                minHeight: '64px',
-                '&.Mui-expanded': {
-                    minHeight: '64px',
-                },
-            },
-            content: {
-                margin: '12px 0',
-                '&.Mui-expanded': {
-                    margin: '12px 0',
-                },
-            },
-        },
-    },
-    MuiAccordionDetails: {
-        styleOverrides: {
-            root: {
-                padding: '16px',
+            arrow: {
+                color: '#ffffff',
             },
         },
     },
   },
 });
 
-// Helper function to determine Stepper active step
-const getOrderStatusStep = (status) => {
-  switch (status) {
-    case 'Order Placed': return 0;
-    case 'Processing': return 1;
-    case 'Shipped': return 2;
-    case 'Out for Delivery': return 3;
-    case 'Delivered': return 4;
-    case 'Cancelled': return 0;
-    default: return 0;
-  }
-};
-
 const OrderPage = () => {
   const [orders, setOrders] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [user, setUser] = useState(null);
   const [userAddress, setUserAddress] = useState(null);
   const navigate = useNavigate();
 
-  // PayPal related states and ref
-  const [showPayPalDialog, setShowPayPalDialog] = useState(false); // Changed name for clarity with Dialog
-  const [selectedItemToReorder, setSelectedItemToReorder] = useState(null); // Holds the single item
-  const paypalRef = useRef(null); // Ref for PayPal button container
+  const [showPayPalDialog, setShowPayPalDialog] = useState(false);
+  const [selectedItemToReorder, setSelectedItemToReorder] = useState(null);
+  const paypalRef = useRef(null);
 
-  // Effect to load PayPal script and render buttons
+  const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
+  const [reviewingItem, setReviewingItem] = useState(null);
+  const [rating, setRating] = useState(0);
+  const [reviewText, setReviewText] = useState('');
+
+  const [isAddressDialogOpen, setIsAddressDialogOpen] = useState(false);
+  const [newAddress, setNewAddress] = useState({
+      line1: '', city: '', state: '', zip: '', country: 'India'
+  });
+  
+  const [quantity, setQuantity] = useState(1);
+
+  // Function to format an address object into a string
+  const formatAddress = (address) => {
+    if (!address) return null;
+    const { address_line1, address_line2, city, state, zip_code, country } = address;
+    return `${address_line1}${address_line2 ? `, ${address_line2}` : ''}, ${city}, ${state} ${zip_code}, ${country}`;
+  };
+  
+  // Fetch user profile, addresses, and orders
   useEffect(() => {
-    // Only proceed if dialog is open and an item is selected
-    if (showPayPalDialog && selectedItemToReorder) {
-      // Clear previous PayPal buttons if any
-      if (paypalRef.current) {
-        paypalRef.current.innerHTML = '';
-      }
-
-      // Check if PayPal SDK is already loaded
-      if (!window.paypal) {
-        const script = document.createElement('script');
-        script.src = 'https://www.paypal.com/sdk/js?client-id=AXa2PL8lJEEoKPO8nKbAN3h6qtRxbK3OTY46-PLESpSN2soahg38DuLUv8nwbQA5C5HJXLHhDZTkyRnD'; // Replace with your actual client ID in production
-        script.async = true;
-        script.onload = () => {
-          // Ensure paypalRef.current is available before rendering buttons
-          if (paypalRef.current) {
-            window.paypal.Buttons({
-              createOrder: (data, actions) => {
-                // Use the price and quantity of the selected single item
-                const itemPrice = selectedItemToReorder.price || 1500; // Fallback price
-                const itemQuantity = selectedItemToReorder.qty || 1; // Fallback quantity
-                const totalAmount = (itemPrice * itemQuantity).toFixed(2);
-
-                return actions.order.create({
-                  purchase_units: [{
-                    amount: {
-                      value: totalAmount
-                    }
-                  }]
-                });
-              },
-              onApprove: (data, actions) => {
-                return actions.order.capture().then(function(details) {
-                  toast.success(`Successfully re-ordered "${selectedItemToReorder.name}"!`);
-                  console.log('Item re-purchased:', selectedItemToReorder.id, details);
-
-                  // Update orders state: remove the re-ordered item
-                  setOrders(prevOrders => {
-                    return prevOrders.map(order => {
-                      // Find the order that contains this item
-                      if (order.items.some(item => item.id === selectedItemToReorder.id)) {
-                        const updatedItems = order.items.filter(item => item.id !== selectedItemToReorder.id);
-                        // If the order becomes empty, remove the entire order
-                        if (updatedItems.length === 0) {
-                          return null; // Mark for removal
-                        }
-                        return { ...order, items: updatedItems };
-                      }
-                      return order;
-                    }).filter(Boolean); // Filter out null orders
-                  });
-
-                  // Reset PayPal state after successful payment
-                  setShowPayPalDialog(false);
-                  setSelectedItemToReorder(null);
-                });
-              },
-              onCancel: (data) => {
-                toast.info("PayPal payment cancelled.");
-                setShowPayPalDialog(false);
-                setSelectedItemToReorder(null);
-              },
-              onError: (err) => {
-                toast.error("An error occurred during PayPal payment.");
-                console.error("PayPal Error:", err);
-                setShowPayPalDialog(false);
-                setSelectedItemToReorder(null);
-              }
-            }).render(paypalRef.current);
-          }
-        };
-        document.body.appendChild(script);
-      } else {
-        // If SDK is already loaded, just render buttons
-        if (paypalRef.current) {
-          window.paypal.Buttons({
-            createOrder: (data, actions) => {
-              const itemPrice = selectedItemToReorder.price || 1500;
-              const itemQuantity = selectedItemToReorder.qty || 1;
-              const totalAmount = (itemPrice * itemQuantity).toFixed(2);
-
-              return actions.order.create({
-                purchase_units: [{
-                  amount: {
-                    value: totalAmount
-                  }
-                }]
-              });
-            },
-            onApprove: (data, actions) => {
-              return actions.order.capture().then(function(details) {
-                toast.success(`Successfully re-ordered "${selectedItemToReorder.name}"!`);
-                console.log('Item re-purchased:', selectedItemToReorder.id, details);
-
-                setOrders(prevOrders => {
-                  return prevOrders.map(order => {
-                    if (order.items.some(item => item.id === selectedItemToReorder.id)) {
-                      const updatedItems = order.items.filter(item => item.id !== selectedItemToReorder.id);
-                      if (updatedItems.length === 0) {
-                        return null;
-                      }
-                      return { ...order, items: updatedItems };
-                    }
-                    return order;
-                  }).filter(Boolean);
-                });
-
-                setShowPayPalDialog(false);
-                setSelectedItemToReorder(null);
-              });
-            },
-            onCancel: (data) => {
-              toast.info("PayPal payment cancelled.");
-              setShowPayPalDialog(false);
-              setSelectedItemToReorder(null);
-            },
-            onError: (err) => {
-              toast.error("An error occurred during PayPal payment.");
-              console.error("PayPal Error:", err);
-              setShowPayPalDialog(false);
-              setSelectedItemToReorder(null);
-            }
-          }).render(paypalRef.current);
-        }
-      }
-    }
-  }, [showPayPalDialog, selectedItemToReorder]); // Dependencies for PayPal effect
-
-  // Effect to fetch orders on component mount
-  useEffect(() => {
-    const fetchOrders = async () => {
+    const fetchInitialData = async () => {
       setIsLoading(true);
       setError(null);
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        setError('You are not logged in. Please log in to view your orders.');
+        setIsLoading(false);
+        navigate('/login');
+        return;
+      }
+
       try {
-        const token = localStorage.getItem('token');
-        if (!token) {
-          setError('You are not logged in. Please log in to view your orders.');
-          setIsLoading(false);
-          return;
+        const userFromStorage = JSON.parse(localStorage.getItem('user'));
+        if (userFromStorage) {
+            setUser(userFromStorage);
         }
 
-        const response = await fetch('http://localhost:5000/orders', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
+        const addressRes = await fetch('http://localhost:5000/user/addresses', {
+          headers: { 'Authorization': `Bearer ${token}` }
         });
+        if (!addressRes.ok) throw new Error('Failed to fetch addresses');
+        const addressesData = await addressRes.json();
+        const defaultAddress = addressesData.find(addr => addr.is_default);
+        setUserAddress(formatAddress(defaultAddress));
 
-        if (response.status === 401 || response.status === 403) {
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          setError('Your session has expired or is invalid. Please log in again.');
-          setIsLoading(false);
-          setTimeout(() => navigate('/login'), 2000);
-          return;
-        }
+        const ordersRes = await fetch('http://localhost:5000/orders', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!ordersRes.ok) throw new Error('Failed to fetch orders');
+        const ordersData = await ordersRes.json();
+        setOrders(ordersData);
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `Failed to fetch orders: ${response.status}`);
-        }
-
-        const data = await response.json();
-        setOrders(data);
       } catch (err) {
-        console.error('Error fetching orders:', err);
-        if (err instanceof SyntaxError && err.message.includes('Unexpected token')) {
-            setError('Received an unexpected response from the server. Please check backend status.');
-        } else {
-            setError(err.message);
-        }
+        setError(err.message);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchOrders();
+    fetchInitialData();
   }, [navigate]);
-
-  // Effect to fetch user address on component mount
+  
+  // PayPal Script Loader
   useEffect(() => {
-    const fetchUserAddress = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) {
-          setUserAddress('Not logged in.');
-          return;
-        }
-
-        const response = await fetch('http://localhost:5000/user/address', {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data && data.address) {
-            setUserAddress(data.address);
-          } else {
-            setUserAddress('No primary address set. Go to Manage Addresses to add one.');
-          }
-        } else {
-          console.warn('Could not fetch user address:', response.status);
-          try {
-              const errorData = await response.json();
-              setUserAddress(`Error loading primary address: ${errorData.message || response.status}`);
-          } catch {
-              setUserAddress(`Error loading primary address: ${response.statusText || response.status}`);
-          }
-        }
-      } catch (err) {
-        console.error('Error fetching user address:', err);
-        if (err instanceof SyntaxError && err.message.includes('Unexpected token')) {
-            setUserAddress('Error loading primary address: Unexpected server response.');
-        } else {
-            setUserAddress('Error loading primary address.');
-        }
+    if (showPayPalDialog && selectedItemToReorder) {
+      if (paypalRef.current) {
+        paypalRef.current.innerHTML = '';
       }
-    };
+      const renderPayPalButtons = () => {
+          if (paypalRef.current && window.paypal) {
+              window.paypal.Buttons({
+                  createOrder: (data, actions) => {
+                      const itemPrice = parseFloat(selectedItemToReorder.price) || 0;
+                      const totalAmount = (itemPrice * quantity).toFixed(2);
+                      return actions.order.create({
+                          purchase_units: [{ amount: { value: totalAmount } }]
+                      });
+                  },
+                  onApprove: (data, actions) => {
+                      return actions.order.capture().then(details => {
+                          toast.success(`Successfully ordered ${quantity} of "${selectedItemToReorder.name}"!`);
+                          setShowPayPalDialog(false);
+                          setSelectedItemToReorder(null);
+                          setOrders([]); 
+                      });
+                  },
+                  onError: (err) => {
+                      toast.error("An error occurred during payment.");
+                      setShowPayPalDialog(false);
+                  }
+              }).render(paypalRef.current);
+          }
+      };
 
-    fetchUserAddress();
-  }, [navigate]);
+      if (!window.paypal) {
+        const script = document.createElement('script');
+        script.src = 'https://www.paypal.com/sdk/js?client-id=AXa2PL8lJEEoKPO8nKbAN3h6qtRxbK3OTY46-PLESpSN2soahg38DuLUv8nwbQA5C5HJXLHhDZTkyRnD';
+        script.async = true;
+        script.onload = renderPayPalButtons;
+        document.body.appendChild(script);
+      } else {
+        renderPayPalButtons();
+      }
+    }
+  }, [showPayPalDialog, selectedItemToReorder, quantity]);
 
-  // Function to handle "Buy Now" for a single item
   const handleBuyNowItem = (item) => {
     setSelectedItemToReorder(item);
-    setShowPayPalDialog(true);
+    setQuantity(1);
+    if (userAddress) {
+      setShowPayPalDialog(true);
+    } else {
+      setIsAddressDialogOpen(true);
+    }
+  };
+  
+  const handleSaveAddressAndContinue = async () => {
+      if (!newAddress.line1 || !newAddress.city || !newAddress.state || !newAddress.zip) {
+          toast.error("Please fill all address fields.");
+          return;
+      }
+      
+      const token = localStorage.getItem('token');
+      const addressPayload = {
+          address_line1: newAddress.line1,
+          city: newAddress.city,
+          state: newAddress.state,
+          zip_code: newAddress.zip,
+          country: newAddress.country,
+          is_default: true
+      };
+
+      toast.info("Saving your address...");
+      try {
+          const response = await fetch('http://localhost:5000/user/address', {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify(addressPayload)
+          });
+          if (!response.ok) throw new Error("Failed to save address");
+          
+          const savedAddress = await response.json();
+          setUserAddress(formatAddress(savedAddress));
+          toast.success("Address saved successfully!");
+          
+          setIsAddressDialogOpen(false);
+          setShowPayPalDialog(true);
+
+      } catch (err) {
+          toast.error("Could not save address. Please try again.");
+          console.error(err);
+      }
   };
 
-  // Function to close the PayPal dialog
   const handleClosePayPalDialog = () => {
     setShowPayPalDialog(false);
     setSelectedItemToReorder(null);
+  };
+
+  const handleOpenReviewDialog = (item) => {
+    setReviewingItem(item);
+    setIsReviewDialogOpen(true);
+  };
+
+  const handleCloseReviewDialog = () => {
+    setIsReviewDialogOpen(false);
+    setReviewingItem(null);
+    setRating(0);
+    setReviewText('');
+  };
+
+  const handleSubmitReview = async () => {
+    if (rating === 0) {
+      toast.warn("Please provide a rating.");
+      return;
+    }
+    toast.info("Submitting your review...");
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    toast.success(`Review for "${reviewingItem.name}" submitted!`);
+    handleCloseReviewDialog();
   };
 
   return (
@@ -419,282 +305,171 @@ const OrderPage = () => {
             Your Orders
           </Typography>
 
-          {/* User Address Section */}
           <Paper elevation={2} sx={{ p: { xs: 2, md: 3 }, mb: 4, borderRadius: '12px', bgcolor: theme.palette.background.paper }}>
-            <Typography variant="h6" sx={{ mb: 1.5, color: theme.palette.primary.dark, display: 'flex', alignItems: 'center' }}>
-              <LocalShippingIcon sx={{ mr: 1, color: theme.palette.primary.main }} />
-              Your Primary Shipping Address
-            </Typography>
-            <Typography variant="body1" color="text.secondary" sx={{
-              pl: 3,
-              mb: (userAddress === 'Not logged in.' || (userAddress && userAddress.startsWith('Error'))) ? 0 : 2
-            }}>
-              {userAddress ? userAddress : 'Loading your address...'}
-            </Typography>
-            {userAddress && userAddress !== 'Not logged in.' && !(userAddress && userAddress.startsWith('Error')) && (
-                <Button
-                    variant="outlined"
-                    size="small"
-                    sx={{ mt: 2 }}
-                    onClick={() => navigate('/address')}
-                >
-                    Manage Addresses
-                </Button>
-            )}
-            {userAddress === 'Not logged in.' && (
-                 <Button
-                    variant="outlined"
-                    size="small"
-                    sx={{ mt: 2 }}
-                    onClick={() => navigate('/login')}
-                >
-                    Login to Manage Addresses
-                </Button>
-            )}
+             <Typography variant="h6" sx={{ mb: 1.5, color: theme.palette.primary.dark, display: 'flex', alignItems: 'center' }}>
+               <LocalShippingIcon sx={{ mr: 1, color: theme.palette.primary.main }} />
+               Your Primary Shipping Address
+             </Typography>
+             <Typography variant="body1" color="text.secondary" sx={{ pl: 3, mb: 2 }}>
+               {userAddress ? userAddress : 'No primary address set. You will be asked to add one when re-ordering.'}
+             </Typography>
+             <Button variant="outlined" size="small" sx={{ mt: 2 }} onClick={() => navigate('/address')}>
+                 Manage Addresses
+             </Button>
           </Paper>
 
-          {/* Loading State */}
-          {isLoading && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '300px' }}>
-              <CircularProgress size={60} sx={{ mb: 2 }} />
-              <Typography variant="h6" color="text.secondary">Fetching your past orders...</Typography>
-            </Box>
-          )}
-
-          {/* Error State */}
-          {error && (
-            <Alert severity="error" sx={{ mb: 3 }} action={
-              (error.includes('log in') || error.includes('session expired')) && (
-                <Button color="inherit" size="small" onClick={() => navigate('/login')}>
-                  LOGIN
-                </Button>
-              )
-            }>
-              {error}
-            </Alert>
-          )}
-
-          {/* Empty Orders State */}
+          {isLoading && <Box sx={{ display: 'flex', justifyContent: 'center', my: 5 }}><CircularProgress /></Box>}
+          {error && <Alert severity="error">{error}</Alert>}
+          
           {!isLoading && !error && orders.length === 0 && (
-            <Paper elevation={2} sx={{ p: { xs: 3, md: 5 }, textAlign: 'center', borderRadius: '12px', bgcolor: theme.palette.background.paper }}>
+            <Paper elevation={2} sx={{ p: 5, textAlign: 'center' }}>
               <ShoppingCartIcon sx={{ fontSize: 80, color: theme.palette.info.light, mb: 2 }} />
-              <Typography variant="h6" gutterBottom>
-                No orders yet!
-              </Typography>
-              <Typography variant="body1" color="text.secondary" sx={{ mb: 3 }}>
-                It looks like you haven't placed any orders with us.
-              </Typography>
-              <Button
-                variant="contained"
-                color="primary"
-                size="large"
-                onClick={() => navigate('/')}
-              >
-                Start Shopping
-              </Button>
+              <Typography variant="h6" gutterBottom>No orders yet!</Typography>
+              <Button variant="contained" color="primary" onClick={() => navigate('/')}>Start Shopping</Button>
             </Paper>
           )}
 
-          {/* Orders List */}
           {!isLoading && !error && orders.length > 0 && (
             <Stack spacing={4}>
               {orders.map((order) => (
-                <Paper key={order.id} elevation={3} sx={{ p: { xs: 2, md: 4 }, borderRadius: '12px' }}>
-                  {/* Order Header Section */}
+                <Paper key={order.id} elevation={3} sx={{ p: { xs: 2, md: 4 } }}>
                   <Grid container spacing={2} alignItems="center" justifyContent="space-between">
-                    <Grid item xs={12} sm={6}>
-                      <Typography variant="subtitle1" color="text.secondary">
-                        <Box component="span" sx={{ fontWeight: 'bold', color: theme.palette.primary.main }}>ORDER PLACED:</Box> {order.orderDate}
-                      </Typography>
-                      <Typography variant="subtitle1" color="text.secondary">
-                        <Box component="span" sx={{ fontWeight: 'bold', color: theme.palette.primary.main }}>TOTAL:</Box> ₹{order.total}
-                      </Typography>
+                    <Grid item xs={12} sm={8}>
+                      <Typography variant="subtitle1" color="text.secondary"><Box component="span" sx={{ fontWeight: 'bold', color: theme.palette.primary.main }}>ORDER PLACED:</Box> {order.orderDate}</Typography>
+                      <Typography variant="subtitle1" color="text.secondary"><Box component="span" sx={{ fontWeight: 'bold', color: theme.palette.primary.main }}>TOTAL:</Box> ₹{order.total}</Typography>
                       <Typography variant="subtitle1" color="text.secondary" sx={{ display: 'flex', alignItems: 'center' }}>
                         <LocalShippingIcon sx={{ mr: 0.5, fontSize: '1rem', color: theme.palette.primary.main }} />
-                        <Box component="span" sx={{ fontWeight: 'bold', color: theme.palette.primary.main }}>SHIP TO:</Box> {order.shippedTo}
+                        <Box component="span" sx={{ fontWeight: 'bold', color: theme.palette.primary.main }}>SHIP TO:</Box>&nbsp;
+                        <Tooltip
+                          title={
+                            <React.Fragment>
+                              <Typography color="inherit" sx={{ fontWeight: 'bold' }}>{user?.name || order.shippedTo}</Typography>
+                              <Typography variant="body2">{userAddress || 'Address not available.'}</Typography>
+                            </React.Fragment>
+                          }
+                          arrow
+                        >
+                            <span style={{ cursor: 'pointer', color: theme.palette.primary.dark, textDecoration: 'underline' }}>
+                                {user?.name || order.shippedTo}
+                            </span>
+                        </Tooltip>
                       </Typography>
                     </Grid>
-                    <Grid item xs={12} sm={6} sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
-                      <Typography variant="h6" sx={{ color: theme.palette.primary.dark, mb: 1 }}>
-                        Order ID: {order.id}
-                      </Typography>
-                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} justifyContent={{ xs: 'flex-start', sm: 'flex-end' }}>
-                        <Button variant="outlined" size="small">View Order Details</Button>
-                        <Button variant="outlined" size="small">Invoice</Button>
-                      </Stack>
+                    <Grid item xs={12} sm={4} sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
+                      <Typography variant="h6" sx={{ color: theme.palette.primary.dark }}>Order ID: {order.id}</Typography>
                     </Grid>
                   </Grid>
-
-                  <Divider sx={{ my: 3, borderColor: '#eee' }} />
-
-                  {/* Delivery Status */}
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center',
-                      color: order.status === 'Delivered' ? theme.palette.success.main : theme.palette.warning.dark
-                    }}>
-                      {order.status === 'Delivered' ? <CheckCircleOutlineIcon sx={{ mr: 1, fontSize: '1.5rem' }} /> : <LocalShippingIcon sx={{ mr: 1, fontSize: '1.5rem' }} />}
-                      Status: {order.status}
-                      {order.deliveryDate && order.status === 'Delivered' ? ` on ${order.deliveryDate}` : ''}
-                      {order.status !== 'Delivered' && order.deliveryDate ? ` (Est. ${order.deliveryDate})` : ''}
-                    </Typography>
-
-                    {/* Order Progress Stepper */}
-                    <Box sx={{ width: '100%', mt: 2 }}>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                            {['Order Placed', 'Processing', 'Shipped', 'Out for Delivery', 'Delivered'].map((label, index) => (
-                                <Box key={label} sx={{
-                                    textAlign: 'center',
-                                    flex: 1,
-                                    position: 'relative',
-                                    '&:not(:last-of-type)::after': {
-                                        content: '""',
-                                        position: 'absolute',
-                                        width: 'calc(100% - 40px)', // Adjust line length
-                                        height: '2px',
-                                        backgroundColor: index < getOrderStatusStep(order.status) ? theme.palette.primary.main : theme.palette.divider,
-                                        left: 'calc(50% + 20px)', // Align line
-                                        top: '12px',
-                                    }
-                                }}>
-                                    <Box sx={{
-                                        width: 24,
-                                        height: 24,
-                                        borderRadius: '50%',
-                                        bgcolor: index <= getOrderStatusStep(order.status) ? theme.palette.primary.main : theme.palette.divider,
-                                        color: 'white',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        mx: 'auto',
-                                        mb: 0.5,
-                                        fontWeight: 'bold',
-                                        fontSize: '0.8rem',
-                                        boxShadow: index === getOrderStatusStep(order.status) ? '0 0 0 4px rgba(63, 81, 181, 0.3)' : 'none'
-                                    }}>
-                                        {index + 1}
-                                    </Box>
-                                    <Typography variant="caption" sx={{ color: index <= getOrderStatusStep(order.status) ? theme.palette.primary.dark : theme.palette.text.secondary, fontWeight: index === getOrderStatusStep(order.status) ? 'bold' : 'normal' }}>
-                                        {label}
-                                    </Typography>
-                                </Box>
-                            ))}
-                        </Stack>
-                    </Box>
-                  </Box>
-
-
-                  {/* Order Items - Collapsible */}
-                  <Accordion elevation={0} sx={{ border: '1px solid #f0f0f0', borderRadius: '10px !important' }}>
-                    <AccordionSummary
-                      expandIcon={<ExpandMoreIcon />}
-                      aria-controls={`panel${order.id}-content`}
-                      id={`panel${order.id}-header`}
-                      sx={{ bgcolor: theme.palette.background.default, borderRadius: '10px 10px 0 0 !important' }}
-                    >
-                      <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                        Items in this Order ({order.items.length})
-                      </Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      <Stack spacing={2}>
-                        {order.items.map((item, index) => (
-                          <Card key={item.id || index} sx={{ display: 'flex', alignItems: 'center', p: 1, borderRadius: '10px', boxShadow: 'none', border: '1px solid #f0f0f0' }}>
-                            <CardMedia
-                              component="img"
-                              sx={{ width: 100, height: 100, objectFit: 'cover', borderRadius: '8px', mr: 2, flexShrink: 0 }}
-                              image={item.image}
-                              alt={item.name}
-                              onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/100x100?text=No+Image'; }}
-                            />
-                            <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
-                              <CardContent sx={{ flex: '1 0 auto', p: 0, '&:last-child': { pb: 0 } }}>
-                                <Typography variant="body1" sx={{ fontWeight: 500, color: theme.palette.primary.dark }}>{item.name}</Typography>
-                                <Typography variant="body2" color="text.secondary">Qty: {item.qty}</Typography>
-                                <Typography variant="body2" color="text.secondary">Price: ₹{item.price}</Typography>
-                              </CardContent>
-                            </Box>
-                            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: 'center', pr: 1, gap: 1 }}>
-                              {/* New "Buy Now" button for individual items */}
-                              <Button
-                                variant="contained"
-                                size="small"
-                                color="primary"
-                                onClick={() => handleBuyNowItem(item)}
-                              >
-                                Buy Now
-                              </Button>
-                              <Button variant="outlined" size="small">Leave Review</Button>
-                            </Box>
-                          </Card>
-                        ))}
-                      </Stack>
-                    </AccordionDetails>
-                  </Accordion>
-
-                  {/* Removed the "Re-order Now" button for the entire order */}
+                  <Divider sx={{ my: 3 }} />
+                  <Stack spacing={2}>
+                    {order.items.map((item, index) => (
+                      <Card key={item.id || index} sx={{ display: 'flex', alignItems: 'center', p: 1, boxShadow: 'none', border: '1px solid #f0f0f0' }}>
+                        <CardMedia component="img" sx={{ width: 100, height: 100, objectFit: 'cover', borderRadius: '8px', mr: 2 }} image={item.image} alt={item.name} />
+                        <Box sx={{ flexGrow: 1 }}>
+                          <CardContent sx={{ p: 0, '&:last-child': { pb: 0 } }}>
+                            <Typography variant="body1" sx={{ fontWeight: 500 }}>{item.name}</Typography>
+                            <Typography variant="body2">Qty: {item.qty}</Typography>
+                            <Typography variant="body2">Price: ₹{item.price}</Typography>
+                          </CardContent>
+                        </Box>
+                        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 1 }}>
+                          <Button variant="contained" size="small" onClick={() => handleBuyNowItem(item)}>Buy Now</Button>
+                          <Button variant="outlined" size="small" onClick={() => handleOpenReviewDialog(item)}>Leave Review</Button>
+                        </Box>
+                      </Card>
+                    ))}
+                  </Stack>
                 </Paper>
               ))}
             </Stack>
           )}
 
+          {/* Address Capture Dialog */}
+          <Dialog open={isAddressDialogOpen} onClose={() => setIsAddressDialogOpen(false)} maxWidth="sm" fullWidth>
+              <DialogTitle sx={{ textAlign: 'center' }}>
+                  <Typography variant="h5" color="primary">Add Shipping Address</Typography>
+              </DialogTitle>
+              <DialogContent dividers>
+                  <Typography variant="body1" sx={{ mb: 2 }}>
+                      We don't have a default address for you. Please add one to continue.
+                  </Typography>
+                  <Stack spacing={2} sx={{ pt: 1 }}>
+                      <TextField label="Address Line 1" value={newAddress.line1} onChange={e => setNewAddress({...newAddress, line1: e.target.value})} fullWidth required />
+                      <TextField label="City" value={newAddress.city} onChange={e => setNewAddress({...newAddress, city: e.target.value})} fullWidth required />
+                      <TextField label="State / Province" value={newAddress.state} onChange={e => setNewAddress({...newAddress, state: e.target.value})} fullWidth required />
+                      <TextField label="Postal / Zip Code" value={newAddress.zip} onChange={e => setNewAddress({...newAddress, zip: e.target.value})} fullWidth required />
+                      <TextField label="Country" value={newAddress.country} onChange={e => setNewAddress({...newAddress, country: e.target.value})} fullWidth required />
+                  </Stack>
+              </DialogContent>
+              <DialogActions sx={{ p: 2 }}>
+                  <Button onClick={() => setIsAddressDialogOpen(false)} variant="outlined">Cancel</Button>
+                  <Button onClick={handleSaveAddressAndContinue} variant="contained">Save and Continue</Button>
+              </DialogActions>
+          </Dialog>
+
           {/* PayPal Payment Dialog */}
-          <Dialog
-            open={showPayPalDialog}
-            onClose={handleClosePayPalDialog}
-            maxWidth="sm"
-            fullWidth
-            PaperProps={{
-              sx: {
-                borderRadius: '12px',
-                boxShadow: '0 8px 30px rgba(0,0,0,0.2)',
-                p: 2, // Padding inside the dialog paper
-              }
-            }}
-          >
-            <DialogTitle sx={{ textAlign: 'center', pb: 1 }}>
-              <Typography variant="h5" color="primary">Complete Your Purchase</Typography>
-            </DialogTitle>
+          <Dialog open={showPayPalDialog} onClose={handleClosePayPalDialog} maxWidth="sm" fullWidth>
+            <DialogTitle sx={{ textAlign: 'center' }}><Typography variant="h5" color="primary">Complete Your Purchase</Typography></DialogTitle>
             <DialogContent dividers sx={{ p: 3 }}>
               {selectedItemToReorder && (
-                <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: 'center', gap: 2, mb: 3, p: 2, border: '1px solid #eee', borderRadius: '8px', bgcolor: theme.palette.background.default }}>
+                <Box sx={{ display: 'flex', gap: 2, mb: 3, p: 2, border: '1px solid #eee', borderRadius: '8px' }}>
+                  {/* --- NEW: Product Image --- */}
                   <CardMedia
                     component="img"
-                    sx={{ width: 80, height: 80, objectFit: 'contain', borderRadius: '8px', flexShrink: 0 }}
+                    sx={{ width: 100, height: 100, objectFit: 'contain', borderRadius: '8px', flexShrink: 0 }}
                     image={selectedItemToReorder.image}
                     alt={selectedItemToReorder.name}
-                    onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/80x80?text=No+Image'; }}
                   />
-                  <Box sx={{ flexGrow: 1 }}>
+                  <Box>
                     <Typography variant="h6">{selectedItemToReorder.name}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Qty: {selectedItemToReorder.qty} | Price: ₹{selectedItemToReorder.price}
+                    <FormControl sx={{ my: 2, minWidth: 120 }} size="small">
+                      <InputLabel>Quantity</InputLabel>
+                      <Select
+                          value={quantity}
+                          label="Quantity"
+                          onChange={(e) => setQuantity(e.target.value)}
+                      >
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(q => (
+                              <MenuItem key={q} value={q}>{q}</MenuItem>
+                          ))}
+                      </Select>
+                    </FormControl>
+                    <Typography variant="h6" color="success.main" sx={{ fontWeight: 'bold' }}>
+                      Total: ₹{( (parseFloat(selectedItemToReorder.price) || 0) * quantity ).toFixed(2)}
                     </Typography>
                   </Box>
-                  <Typography variant="h6" color="success.main" sx={{ fontWeight: 'bold' }}>
-                    Total: ₹{(selectedItemToReorder.price * selectedItemToReorder.qty).toFixed(2)}
-                  </Typography>
                 </Box>
               )}
-              <Typography variant="body1" sx={{ textAlign: 'center', mb: 2 }}>
-                Click the PayPal button below to finalize your payment securely.
-              </Typography>
-              <Box ref={paypalRef} sx={{ minHeight: '50px', display: 'flex', justifyContent: 'center', alignItems: 'center' }} />
+              <div ref={paypalRef}></div>
             </DialogContent>
-            <DialogActions sx={{ justifyContent: 'center', pt: 2 }}>
-              <Button
-                variant="outlined"
-                color="secondary"
-                onClick={handleClosePayPalDialog}
-                sx={{ width: '100%', maxWidth: '200px' }}
-              >
-                Cancel
-              </Button>
+            <DialogActions>
+              <Button onClick={handleClosePayPalDialog}>Cancel</Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Review Dialog */}
+          <Dialog open={isReviewDialogOpen} onClose={handleCloseReviewDialog} maxWidth="sm" fullWidth>
+            <DialogTitle sx={{ textAlign: 'center' }}><Typography variant="h5" color="primary">Leave a Review</Typography></DialogTitle>
+            <DialogContent dividers>
+              {reviewingItem && (
+                <Stack spacing={3} sx={{ pt: 1 }}>
+                  <Typography variant="h6">You are reviewing: <strong>{reviewingItem.name}</strong></Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Typography component="legend">Your Rating:</Typography>
+                    <Rating name="product-rating" value={rating} onChange={(e, newVal) => setRating(newVal)} precision={0.5} size="large" />
+                  </Box>
+                  <TextField label="Your Review (optional)" multiline rows={4} value={reviewText} onChange={e => setReviewText(e.target.value)} fullWidth />
+                </Stack>
+              )}
+            </DialogContent>
+            <DialogActions sx={{ p: 2 }}>
+              <Button onClick={handleCloseReviewDialog} variant="outlined">Cancel</Button>
+              <Button onClick={handleSubmitReview} variant="contained">Submit Review</Button>
             </DialogActions>
           </Dialog>
 
         </Container>
       </Box>
-      <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover />
+      <ToastContainer position="top-right" autoClose={3000} />
     </ThemeProvider>
   );
 };

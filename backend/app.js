@@ -3,19 +3,19 @@ const mysql = require('mysql2');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-const util = require('util'); // For promisifying db.query
-require('dotenv').config(); // Load environment variables from .env file
+const util = require('util'); 
+require('dotenv').config(); 
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET || 'your_super_secret_jwt_key_please_change_this_in_production'; // Use a strong, unique secret in production
 
 // Middleware setup
-app.use(cors()); // Enable CORS for all routes
-app.use(express.json()); // Enable JSON body parsing
+app.use(cors()); 
+app.use(express.json()); 
 
-// MySQL Connection Pool (recommended for production applications)
-// Using createConnection for simplicity as per original, but pool is better for high traffic
+
+
 const db = mysql.createConnection({
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
@@ -23,116 +23,124 @@ const db = mysql.createConnection({
   database: process.env.DB_DATABASE || 'ecommerce',
 });
 
-// Promisify db.query to use async/await syntax
+
 const query = util.promisify(db.query).bind(db);
 
-// Connect to the database and initialize tables/data
+
 db.connect(async (err) => {
   if (err) {
     console.error('❌ Database connection error:', err.message);
-    // In a real application, you might want to exit or retry
-    process.exit(1); // Exit the process if database connection fails critically
+    
+    process.exit(1); 
   } else {
     console.log('✅ Connected to MySQL database.');
-    await initializeDatabase(); // Initialize tables and insert default data
+    await initializeDatabase(); 
   }
 });
 
-/**
- * Initializes the database by creating necessary tables if they don't exist
- * and inserting default data for products, users, and orders.
- */
+
 async function initializeDatabase() {
   try {
     // 1. Create users table
-    await query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        email VARCHAR(255) NOT NULL UNIQUE,
-        password VARCHAR(255) NOT NULL,
-        role VARCHAR(50) DEFAULT 'user', -- 'user' or 'admin' or 'superadmin'
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
+    const createUserTableQuery = `
+CREATE TABLE IF NOT EXISTS users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL UNIQUE,
+  password VARCHAR(255) NOT NULL,
+  role VARCHAR(50) DEFAULT 'user',
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+`.trim();
+    console.log('Executing SQL for users table:\n', createUserTableQuery);
+    await query(createUserTableQuery);
     console.log('✅ Users table ensured.');
 
     // 2. Create products table
-    await query(`
-      CREATE TABLE IF NOT EXISTS products (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        tagline VARCHAR(255),
-        description TEXT,
-        image VARCHAR(255),
-        category VARCHAR(100),
-        price DECIMAL(10, 2) NOT NULL
-      );
-    `);
+    const createProductsTableQuery = `
+CREATE TABLE IF NOT EXISTS products (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  tagline VARCHAR(255),
+  description TEXT,
+  image VARCHAR(255),
+  category VARCHAR(100),
+  price DECIMAL(10, 2) NOT NULL
+);
+`.trim();
+    console.log('Executing SQL for products table:\n', createProductsTableQuery);
+    await query(createProductsTableQuery);
     console.log('✅ Products table ensured.');
 
     // 3. Create wishlist table
-    await query(`
-      CREATE TABLE IF NOT EXISTS wishlist (
-        user_id INT NOT NULL,
-        product_id INT NOT NULL,
-        PRIMARY KEY (user_id, product_id),
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
-      );
-    `);
+    const createWishlistTableQuery = `
+CREATE TABLE IF NOT EXISTS wishlist (
+  user_id INT NOT NULL,
+  product_id INT NOT NULL,
+  PRIMARY KEY (user_id, product_id),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+`.trim();
+    console.log('Executing SQL for wishlist table:\n', createWishlistTableQuery);
+    await query(createWishlistTableQuery);
     console.log('✅ Wishlist table ensured.');
 
     // 4. Create orders table
-    await query(`
-      CREATE TABLE IF NOT EXISTS orders (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NOT NULL,
-        order_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-        delivery_date DATE,
-        total_amount DECIMAL(10, 2) NOT NULL,
-        shipped_to VARCHAR(500) NOT NULL, -- Increased length for full address
-        status VARCHAR(50) DEFAULT 'Processing', -- e.g., 'Processing', 'Shipped', 'Delivered', 'Cancelled'
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-      );
-    `);
+    const createOrdersTableQuery = `
+CREATE TABLE IF NOT EXISTS orders (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  order_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+  delivery_date DATE,
+  total_amount DECIMAL(10, 2) NOT NULL,
+  shipped_to VARCHAR(500) NOT NULL,
+  status VARCHAR(50) DEFAULT 'Processing',
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+`.trim();
+    console.log('Executing SQL for orders table:\n', createOrdersTableQuery);
+    await query(createOrdersTableQuery);
     console.log('✅ Orders table ensured.');
 
     // 5. Create order_items table
-    await query(`
-      CREATE TABLE IF NOT EXISTS order_items (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        order_id INT NOT NULL,
-        product_id INT NOT NULL,
-        quantity INT NOT NULL,
-        price_at_purchase DECIMAL(10, 2) NOT NULL,
-        product_name_at_purchase VARCHAR(255) NOT NULL,
-        product_image_at_purchase VARCHAR(255),
-        FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
-        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
-      );
-    `);
+    const createOrderItemsTableQuery = `
+CREATE TABLE IF NOT EXISTS order_items (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  order_id INT NOT NULL,
+  product_id INT NOT NULL,
+  quantity INT NOT NULL,
+  price_at_purchase DECIMAL(10, 2) NOT NULL,
+  product_name_at_purchase VARCHAR(255) NOT NULL,
+  product_image_at_purchase VARCHAR(255),
+  FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+`.trim();
+    console.log('Executing SQL for order_items table:\n', createOrderItemsTableQuery);
+    await query(createOrderItemsTableQuery);
     console.log('✅ Order_items table ensured.');
 
     // 6. Create user_addresses table
-    await query(`
-      CREATE TABLE IF NOT EXISTS user_addresses (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        user_id INT NOT NULL,
-        address_line1 VARCHAR(255) NOT NULL,
-        address_line2 VARCHAR(255),
-        city VARCHAR(100) NOT NULL,
-        state VARCHAR(100) NOT NULL,
-        zip_code VARCHAR(20) NOT NULL,
-        country VARCHAR(100) NOT NULL,
-        is_default BOOLEAN DEFAULT FALSE,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-      );
-    `);
+    const createUserAddressesTableQuery = `
+CREATE TABLE IF NOT EXISTS user_addresses (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL,
+  address_line1 VARCHAR(255) NOT NULL,
+  address_line2 VARCHAR(255),
+  city VARCHAR(100) NOT NULL,
+  state VARCHAR(100) NOT NULL,
+  zip_code VARCHAR(20) NOT NULL,
+  country VARCHAR(100) NOT NULL,
+  is_default BOOLEAN DEFAULT FALSE,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+`.trim();
+    console.log('Executing SQL for user_addresses table:\n', createUserAddressesTableQuery);
+    await query(createUserAddressesTableQuery);
     console.log('✅ User_addresses table ensured.');
-
 
     // Insert default data into tables
     await insertDefaultData();
@@ -141,10 +149,7 @@ async function initializeDatabase() {
   }
 }
 
-/**
- * Inserts default data into the users, products, and orders tables if they are empty.
- * This ensures the application has initial data for testing and demonstration.
- */
+
 const insertDefaultData = async () => {
   try {
     // Insert default users if none exist
@@ -156,32 +161,75 @@ const insertDefaultData = async () => {
       const insertUsersQuery = `
         INSERT INTO users (name, email, password, role)
         VALUES
-          ('Khushank Arora', 'khushank@example.com', ?, 'user'),
-          ('Admin User', 'admin@example.com', ?, 'superadmin');
+          (?, ?, ?, ?),
+          (?, ?, ?, ?);
       `;
-      await query(insertUsersQuery, [hashedPasswordUser, hashedPasswordAdmin]);
+      await query(insertUsersQuery, [
+        'Khushank Arora', 'khushank@example.com', hashedPasswordUser, 'user',
+        'Admin User', 'admin@example.com', hashedPasswordAdmin, 'superadmin'
+      ]);
       console.log('🟢 Default users inserted (including superadmin).');
     }
 
     // Insert default products if none exist
     const productCountResult = await query('SELECT COUNT(*) AS count FROM products');
     if (productCountResult[0].count === 0) {
-      const insertProductsQuery = `
-        INSERT INTO products (name, tagline, description, image, category, price)
-        VALUES
-          ('Eco Bottle', 'Hydrate Smartly', 'An eco-friendly reusable water bottle made from recycled materials, perfect for daily hydration.', 'https://placehold.co/300x300/A7C7E7/FFFFFF?text=Eco+Bottle', 'Home', 399.00),
-          ('Smart Watch', 'Time Meets Tech', 'A feature-rich smartwatch with advanced health tracking, notifications, and long battery life.', 'https://placehold.co/300x300/F0E68C/FFFFFF?text=Smart+Watch', 'Electronics', 1999.50),
-          ('Wireless Earbuds', 'Immersive Sound', 'High-fidelity wireless earbuds with active noise cancellation and comfortable fit for all-day listening.', 'https://placehold.co/300x300/DDA0DD/FFFFFF?text=Earbuds', 'Electronics', 899.00),
-          ('Smart LED Bulb', 'Illuminate Your Life', 'An Alexa-enabled smart LED bulb with customizable colors and brightness, controllable via app or voice.', 'https://placehold.co/300x300/ADD8E6/FFFFFF?text=LED+Bulb', 'Home', 499.00),
-          ('Portable Bluetooth Speaker', 'Sound On-The-Go', 'Compact and waterproof Bluetooth speaker, ideal for outdoor adventures and parties.', 'https://placehold.co/300x300/90EE90/FFFFFF?text=Speaker', 'Electronics', 1500.00),
-          ('USB-C Fast Charger', 'Power Up Quickly', 'A powerful 65W USB-C fast charger compatible with most modern laptops and smartphones.', 'https://placehold.co/300x300/FFB6C1/FFFFFF?text=Charger', 'Electronics', 1000.00),
-          ('Men\'s Casual T-Shirt', 'Comfort & Style', 'Soft, breathable cotton casual t-shirt for everyday wear, available in multiple sizes.', 'https://placehold.co/300x300/87CEEB/FFFFFF?text=T-Shirt', 'Apparel', 600.00),
-          ('Designer Handbag', 'Elegance Redefined', 'A stylish and spacious designer handbag, perfect for any occasion.', 'https://placehold.co/300x300/F08080/FFFFFF?text=Handbag', 'Bags', 2500.00),
-          ('Running Shoes', 'Stride with Comfort', 'Lightweight and comfortable running shoes designed for optimal performance.', 'https://placehold.co/300x300/8A2BE2/FFFFFF?text=Shoes', 'Footwear', 1800.00),
-          ('Organic Coffee Beans', 'Rich Aroma', 'Premium organic coffee beans, freshly roasted for a rich and satisfying brew.', 'https://placehold.co/300x300/FFD700/FFFFFF?text=Coffee', 'Groceries', 750.00),
-          ('Facial Cleanser', 'Fresh & Clean', 'Gentle facial cleanser for all skin types, removes impurities and leaves skin refreshed.', 'https://placehold.co/300x300/FFC0CB/FFFFFF?text=Cleanser', 'Beauty', 550.00);
-      `;
-      await query(insertProductsQuery);
+      const productsToInsert = [
+        // Home Category
+        ['Eco Bottle', 'Hydrate Smartly', 'An eco-friendly reusable water bottle made from recycled materials, perfect for daily hydration.', 'https://m.media-amazon.com/images/I/61Nl-F3Q2AL._AC_SL1500_.jpg', 'Home', 399.00],
+        ['Smart LED Bulb', 'Illuminate Your Life', 'An Alexa-enabled smart LED bulb with customizable colors and brightness, controllable via app or voice.', 'https://m.media-amazon.com/images/I/61M-Fw-8LQL._AC_SL1500_.jpg', 'Home', 499.00],
+        ['Stainless Steel Water Bottle', 'Durable Hydration', 'Insulated stainless steel bottle keeps drinks cold for 24 hours and hot for 12.', 'https://m.media-amazon.com/images/I/71Y0v-5oWvL._AC_SL1500_.jpg', 'Home', 750.00],
+        ['Aromatherapy Diffuser', 'Relax & Rejuvenate', 'Ultrasonic essential oil diffuser with ambient light settings.', 'https://m.media-amazon.com/images/I/61y+2Xk-cOL._AC_SL1500_.jpg', 'Home', 950.00],
+        ['Digital Kitchen Scale', 'Bake with Accuracy', 'High-precision digital scale for accurate measurement of ingredients.', 'https://m.media-amazon.com/images/I/610tQ1gX6LL._AC_SL1500_.jpg', 'Home', 650.00],
+        ['Smart Plug', 'Control Your Devices', 'Wi-Fi enabled smart plug compatible with Alexa and Google Assistant for remote control.', 'https://m.media-amazon.com/images/I/61qJ9z-10sL._AC_SL1500_.jpg', 'Home', 350.00],
+        ['Robot Vacuum Cleaner', 'Effortless Cleaning', 'Automated vacuum cleaner with smart mapping and app control.', 'https://m.media-amazon.com/images/I/71w-X-JgYSL._AC_SL1500_.jpg', 'Home', 12000.00],
+        ['Air Purifier', 'Breathe Clean Air', 'HEPA filter air purifier for home, removes allergens, dust, and odors.', 'https://m.media-amazon.com/images/I/61D+7w+6qBL._AC_SL1500_.jpg', 'Home', 5500.00],
+
+        // Electronics Category
+        ['Smart Watch', 'Time Meets Tech', 'A feature-rich smartwatch with advanced health tracking, notifications, and long battery life.', 'https://m.media-amazon.com/images/I/71L-fJ-iMQL._AC_SL1500_.jpg', 'Electronics', 1999.50],
+        ['Wireless Earbuds', 'Immersive Sound', 'High-fidelity wireless earbuds with active noise cancellation and comfortable fit for all-day listening.', 'https://m.media-amazon.com/images/I/61G5S2bB1AL._AC_SL1500_.jpg', 'Electronics', 899.00],
+        ['Portable Bluetooth Speaker', 'Sound On-The-Go', 'Compact and waterproof Bluetooth speaker, ideal for outdoor adventures and parties.', 'https://m.media-amazon.com/images/I/71V2+J1cMCL._AC_SL1500_.jpg', 'Electronics', 1500.00],
+        ['USB-C Fast Charger', 'Power Up Quickly', 'A powerful 65W USB-C fast charger compatible with most modern laptops and smartphones.', 'https://m.media-amazon.com/images/I/61R-g+3zGQL._AC_SL1500_.jpg', 'Electronics', 1000.00],
+        ['Noise-Cancelling Headphones', 'Pure Audio Bliss', 'Over-ear headphones with industry-leading noise cancellation and superb sound quality.', 'https://m.media-amazon.com/images/I/71+v-1-Q0QL._AC_SL1500_.jpg', 'Electronics', 4500.00],
+        ['Portable Power Bank', 'Never Run Out of Power', 'High-capacity power bank with fast charging for multiple devices.', 'https://m.media-amazon.com/images/I/61-z-1-Q0QL._AC_SL1500_.jpg', 'Electronics', 1100.00],
+        ['Wireless Gaming Mouse', 'Precision & Speed', 'Ergonomic wireless gaming mouse with customizable DPI and RGB lighting.', 'https://m.media-amazon.com/images/I/71f-1-Q0QL._AC_SL1500_.jpg', 'Electronics', 1600.00],
+        ['External SSD Drive', 'Blazing Fast Storage', 'Compact and durable external SSD for high-speed data transfer and backup.', 'https://m.media-amazon.com/images/I/71z-1-Q0QL._AC_SL1500_.jpg', 'Electronics', 3000.00],
+
+        // Apparel Category
+        ["Men's Casual T-Shirt", 'Comfort & Style', 'Soft, breathable cotton casual t-shirt for everyday wear, available in multiple sizes.', 'https://m.media-amazon.com/images/I/71-1-Q0QL._AC_SL1500_.jpg', 'Apparel', 600.00],
+        ['Women\'s Running Tights', 'Flexible & Breathable', 'High-waisted running tights with moisture-wicking fabric.', 'https://m.media-amazon.com/images/I/61-1-Q0QL._AC_SL1500_.jpg', 'Apparel', 1100.00],
+        ['Unisex Hoodie', 'Warmth & Style', 'Comfortable fleece hoodie with a classic design, suitable for all seasons.', 'https://m.media-amazon.com/images/I/71w-1-Q0QL._AC_SL1500_.jpg', 'Apparel', 900.00],
+
+        // Bags Category
+        ['Designer Handbag', 'Elegance Redefined', 'A stylish and spacious designer handbag, perfect for any occasion.', 'https://m.media-amazon.com/images/I/81-1-Q0QL._AC_SL1500_.jpg', 'Bags', 2500.00],
+        ['Leather Wallet', 'Classic & Functional', 'Genuine leather wallet with multiple card slots and coin pocket.', 'https://m.media-amazon.com/images/I/71-1-Q0QL._AC_SL1500_.jpg', 'Bags', 1200.00],
+        ['Travel Backpack', 'Adventure Ready', 'Durable and spacious backpack with multiple compartments for travel and daily use.', 'https://m.media-amazon.com/images/I/81-1-Q0QL._AC_SL1500_.jpg', 'Bags', 1800.00],
+
+        // Footwear Category
+        ['Running Shoes', 'Stride with Comfort', 'Lightweight and comfortable running shoes designed for optimal performance.', 'https://m.media-amazon.com/images/I/71-1-Q0QL._AC_SL1500_.jpg', 'Footwear', 1800.00],
+        ['Casual Sneakers', 'Everyday Comfort', 'Stylish and comfortable sneakers for daily wear.', 'https://m.media-amazon.com/images/I/61-1-Q0QL._AC_SL1500_.jpg', 'Footwear', 1400.00],
+
+        // Groceries Category
+        ['Organic Coffee Beans', 'Rich Aroma', 'Premium organic coffee beans, freshly roasted for a rich and satisfying brew.', 'https://m.media-amazon.com/images/I/81-1-Q0QL._AC_SL1500_.jpg', 'Groceries', 750.00],
+        ['Organic Green Tea', 'Healthy Brew', 'Premium organic green tea bags, rich in antioxidants.', 'https://m.media-amazon.com/images/I/71-1-Q0QL._AC_SL1500_.jpg', 'Groceries', 400.00],
+
+        // Beauty Category
+        ['Facial Cleanser', 'Fresh & Clean', 'Gentle facial cleanser for all skin types, removes impurities and leaves skin refreshed.', 'https://m.media-amazon.com/images/I/61-1-Q0QL._AC_SL1500_.jpg', 'Beauty', 550.00],
+        ['Moisturizing Lotion', 'Soft Skin All Day', 'Hydrating body lotion with natural ingredients for smooth and supple skin.', 'https://m.media-amazon.com/images/I/71-1-Q0QL._AC_SL1500_.jpg', 'Beauty', 600.00],
+
+        // Fitness Category
+        ['Yoga Mat', 'Find Your Zen', 'Premium non-slip yoga mat for all types of yoga and fitness routines.', 'https://m.media-amazon.com/images/I/71-1-Q0QL._AC_SL1500_.jpg', 'Fitness', 1200.00],
+        ['Resistance Bands Set', 'Strength On-The-Go', 'Set of five durable resistance bands for full-body workouts.', 'https://m.media-amazon.com/images/I/61-1-Q0QL._AC_SL1500_.jpg', 'Fitness', 700.00],
+      ];
+
+      // Construct the VALUES part of the query with placeholders for each row
+      const placeholders = productsToInsert.map(() => '(?, ?, ?, ?, ?, ?)').join(', ');
+      const insertProductsQuery = `INSERT INTO products (name, tagline, description, image, category, price) VALUES ${placeholders}`;
+      
+      // Flatten the array of arrays into a single array of values for the query
+      const values = productsToInsert.flat();
+
+      await query(insertProductsQuery, values);
       console.log('🟢 Default products inserted.');
     }
 
@@ -209,7 +257,6 @@ const insertDefaultData = async () => {
         console.log('🟢 Default address inserted for Admin User.');
       }
     }
-
 
     // Insert default orders if none exist
     const orderCountResult = await query('SELECT COUNT(*) AS count FROM orders');
@@ -251,7 +298,9 @@ const insertDefaultData = async () => {
           }
           console.log('🟢 Default order 1 (Delivered) inserted for Khushank.');
         }
+      }
 
+      if (adminId) {
         // Order 2: Processing Order for Khushank
         const order2Items = [
           { product: findProduct('Eco Bottle'), qty: 1 },
@@ -934,7 +983,6 @@ app.delete('/user/address/:id', authenticateToken, async (req, res) => {
       // If deleting the default address and there are other addresses, promote another one
       const otherAddresses = existingAddresses.filter(addr => addr.id !== Number(id));
       if (otherAddresses.length > 0) {
-        // Set the first non-deleted address as default
         await query('UPDATE user_addresses SET is_default = TRUE WHERE id = ?', [otherAddresses[0].id]);
       }
     } else if (addressToDelete && addressToDelete.is_default && existingAddresses.length === 1) {

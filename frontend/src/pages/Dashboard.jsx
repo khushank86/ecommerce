@@ -126,6 +126,9 @@ const Dashboard = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentSearchTerm, setCurrentSearchTerm] = useState("");
 
+  const [allProductsForSearch, setAllProductsForSearch] = useState([]);
+
+
   const handleClose = () => {
     setOpen(false);
   };
@@ -178,7 +181,7 @@ const Dashboard = () => {
   }, [wishlist]);
 
   useEffect(() => {
-    const fetchCategories = async () => {
+    const fetchInitialData = async () => {
       try {
         const res = await fetch("http://localhost:5000/categories");
         const data = await res.json();
@@ -186,17 +189,38 @@ const Dashboard = () => {
       } catch (err) {
         setCategories(["Home"]);
       }
-    };
-    fetchCategories();
 
-    const storedUser = JSON.parse(localStorage.getItem("user"));
-    if (storedUser) setUser(storedUser);
-    const cartItems = JSON.parse(localStorage.getItem("cart")) || [];
-    setCartCount(cartItems.length);
-    const storedWishlist = JSON.parse(localStorage.getItem("wishlist")) || [];
-    setWishlist(storedWishlist);
-    fetchWishlistProducts(storedWishlist);
+      try {
+        const res = await fetch("http://localhost:5000/products");
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setAllProductsForSearch(data);
+        }
+      } catch (err) {
+        console.error("Failed to fetch all products for search:", err);
+      }
+
+      const storedUser = JSON.parse(localStorage.getItem("user"));
+      if (storedUser) setUser(storedUser);
+      const cartItems = JSON.parse(localStorage.getItem("cart")) || [];
+      setCartCount(cartItems.length);
+      const storedWishlist = JSON.parse(localStorage.getItem("wishlist")) || [];
+      setWishlist(storedWishlist);
+      fetchWishlistProducts(storedWishlist);
+    };
+
+    fetchInitialData();
+
+    fetch("https://countriesnow.space/api/v0.1/countries")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.data) {
+          setCountries(data.data.map((c) => c.country));
+        }
+      })
+      .catch(() => setCountries([]));
   }, []);
+
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -222,16 +246,6 @@ const Dashboard = () => {
     fetchProducts();
   }, [category, currentSearchTerm]);
 
-  useEffect(() => {
-    fetch("https://countriesnow.space/api/v0.1/countries")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data && data.data) {
-          setCountries(data.data.map((c) => c.country));
-        }
-      })
-      .catch(() => setCountries([]));
-  }, []);
 
   const handleAddToCart = (product) => {
     const cart = JSON.parse(localStorage.getItem("cart")) || [];
@@ -482,15 +496,26 @@ const Dashboard = () => {
       Electronics: "/electronics.png",
       Bags: "/bags.png",
       Footwear: "/footwear.png",
-      Groceries: "/snack.png",
+      Groceries: "/basket.png",
       Snack: "/snack.png",
       Utilities: "/utilities.png",
       Beauty: "/beauty.png",
       Wellness: "/wellness.png",
       Jewellery: "/jewellery.png",
+
     };
     return images[category] || "/categories/default.png";
   }
+
+  // --- NEW: Helper function to handle footer link clicks ---
+  const handleFooterLink = (path) => {
+    if (path.startsWith('toast:')) {
+      toast.info(path.replace('toast:', ''));
+    } else {
+      navigate(path);
+    }
+  };
+
 
   return (
     <Box>
@@ -500,9 +525,12 @@ const Dashboard = () => {
         </Typography>
       </Box>
 
+      {/* --- MODIFIED APP BAR --- */}
+      {/* Changed position to "sticky" to keep it at the top on scroll. */}
+      {/* Added top: 0 and zIndex to ensure it sticks correctly above other content. */}
       <AppBar
-        position="static"
-        sx={{ bgcolor: "white", color: "black", boxShadow: 2 }}
+        position="sticky"
+        sx={{ bgcolor: "white", color: "black", boxShadow: 2, top: 0, zIndex: 1100 }}
       >
         <Toolbar
           sx={{
@@ -646,49 +674,63 @@ const Dashboard = () => {
                 </Box>
               )}
             </Box>
-            {/* Search Bar */}
-            <TextField
-              placeholder="Search for products..."
-              size="small"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              sx={{
-                flex: 1,
-                minWidth: 180,
-                background: "#fff",
-                borderRadius: 1,
-                "& .MuiOutlinedInput-root": {
-                  "&:hover .MuiOutlinedInput-notchedOutline": {
-                    borderColor: "#1976d2",
-                  },
-                  "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-                    borderColor: "#1976d2",
-                    boxShadow: "0 0 0 2px rgba(25, 118, 210, 0.2)",
-                  },
-                  "& input": {
-                    fontWeight: 500,
-                    color: "#222",
-                  },
-                },
-                "& .MuiInputBase-input::placeholder": {
-                  color: "#222",
-                  opacity: 1,
-                  fontWeight: 500,
-                },
-              }}
-              InputProps={{
-                style: {
-                  fontWeight: 500,
-                  color: "#222",
-                },
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  setCurrentSearchTerm(searchTerm);
-                  setPage(1);
+
+            <Autocomplete
+              freeSolo
+              fullWidth
+              options={allProductsForSearch}
+              getOptionLabel={(option) => option.name || ""}
+              onChange={(event, newValue) => {
+                if (typeof newValue === 'object' && newValue !== null) {
+                  handleProductClick(newValue);
+                  setSearchTerm('');
                 }
               }}
+              onInputChange={(event, newInputValue) => {
+                setSearchTerm(newInputValue);
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  placeholder="Search for products..."
+                  size="small"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      setCurrentSearchTerm(searchTerm);
+                      setPage(1);
+                      if (params.inputProps.onKeyDown) {
+                        params.inputProps.onKeyDown(e);
+                      }
+                    }
+                  }}
+                  sx={{
+                    flex: 1,
+                    minWidth: 180,
+                    background: "#fff",
+                    borderRadius: 1,
+                    "& .MuiOutlinedInput-root": {
+                      "&:hover .MuiOutlinedInput-notchedOutline": {
+                        borderColor: "#1976d2",
+                      },
+                      "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                        borderColor: "#1976d2",
+                        boxShadow: "0 0 0 2px rgba(25,118,210,0.2)",
+                      },
+                      "& input": {
+                        fontWeight: 500,
+                        color: "#222",
+                      },
+                    },
+                    "& .MuiInputBase-input::placeholder": {
+                      color: "#222",
+                      opacity: 1,
+                      fontWeight: 500,
+                    },
+                  }}
+                />
+              )}
             />
+
           </Box>
 
           <Box
@@ -1015,7 +1057,6 @@ const Dashboard = () => {
         ))}
       </Box>
 
-      {/* Main Banner Slider - Reverted to original properties */}
       <Box sx={{ mt: 2, mb: 4 }}>
         <Slider
           dots
@@ -1034,7 +1075,6 @@ const Dashboard = () => {
                 style={{
                   width: "100%",
                   height: "400px",
-                //  objectFit: "cover",
                   borderRadius: "12px",
                   boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
                 }}
@@ -1198,7 +1238,6 @@ const Dashboard = () => {
                     }}
                     onClick={() => handleProductClick(product)}
                   >
-                    {/* Image with Enhanced Hover Effect */}
                     <CardMedia
                       component="img"
                       image={product.image}
@@ -1211,9 +1250,9 @@ const Dashboard = () => {
                         mt: 1,
                         transition: "transform 0.3s ease-in-out, filter 0.3s ease-in-out, box-shadow 0.3s ease-in-out",
                         "&:hover": {
-                          transform: "scale(1.1)", // More zoom
-                          filter: "brightness(1.1) contrast(1.1)", // More pop
-                          boxShadow: "0 15px 45px rgba(0,0,0,0.3)", // Stronger, more lifted shadow
+                          transform: "scale(1.1)",
+                          filter: "brightness(1.1) contrast(1.1)",
+                          boxShadow: "0 15px 45px rgba(0,0,0,0.3)",
                         },
                       }}
                     />
@@ -1335,7 +1374,6 @@ const Dashboard = () => {
           </>
         )}
       </Box>
-      {/* Sleek divider for separation */}
       <Box
         sx={{
           width: "100%",
@@ -1359,7 +1397,6 @@ const Dashboard = () => {
         />
       </Box>
 
-      {/* Banners under products - Original properties maintained */}
       <Box
         sx={{
           display: "flex",
@@ -1370,7 +1407,6 @@ const Dashboard = () => {
           mt: 2,
         }}
       >
-        {/* banner4 and banner5 */}
         <Box
           sx={{
             width: "48%",
@@ -1418,7 +1454,6 @@ const Dashboard = () => {
             </Box>
           </Slider>
         </Box>
-        {/* banner6 and banner7 */}
         <Box
           sx={{
             width: "48%",
@@ -1611,7 +1646,7 @@ const Dashboard = () => {
             <Typography variant="h6" color="error" fontWeight="bold" mt={1}>
               8690704684
             </Typography>
-            <Typography sx={{ display: "flex", alignItems: "center", mt: 1 }}>
+            <Typography onClick={() => handleFooterLink('toast:Live chat coming soon!')} sx={{ display: "flex", alignItems: "center", mt: 1, cursor: 'pointer' }}>
               <span
                 style={{ color: "#1976d2", fontSize: "1.2em", marginRight: 8 }}
               >
@@ -1625,19 +1660,20 @@ const Dashboard = () => {
               Products
             </Typography>
             {[
-              "Prices drop",
-              "New products",
-              "Best sales",
-              "Contact us",
-              "Sitemap",
-              "Stores",
+              { label: "Prices drop", path: "/products/sale" },
+              { label: "New products", path: "/products/new" },
+              { label: "Best sales", path: "/products/best-sellers" },
+              { label: "Contact us", path: "/contact" },
+              { label: "Sitemap", path: "/sitemap" },
+              { label: "Stores", path: "/stores" },
             ].map((item) => (
               <Typography
-                key={item}
+                key={item.label}
                 variant="body2"
                 sx={{ "&:hover": { color: "#1976d2", cursor: "pointer" } }}
+                onClick={() => handleFooterLink(item.path)}
               >
-                {item}
+                {item.label}
               </Typography>
             ))}
           </Box>
@@ -1646,19 +1682,20 @@ const Dashboard = () => {
               Our Company
             </Typography>
             {[
-              "Delivery",
-              "Legal Notice",
-              "Terms and conditions",
-              "About us",
-              "Secure payment",
-              "Login",
+              { label: "Delivery", path: "/delivery-info" },
+              { label: "Legal Notice", path: "/legal-notice" },
+              { label: "Terms and conditions", path: "/terms-and-conditions" },
+              { label: "About us", path: "/about-us" },
+              { label: "Secure payment", path: "/payment-info" },
+              { label: "Login", path: "/login" },
             ].map((item) => (
               <Typography
-                key={item}
+                key={item.label}
                 variant="body2"
                 sx={{ "&:hover": { color: "#1976d2", cursor: "pointer" } }}
+                onClick={() => handleFooterLink(item.path)}
               >
-                {item}
+                {item.label}
               </Typography>
             ))}
           </Box>
@@ -1677,6 +1714,7 @@ const Dashboard = () => {
             />
             <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
               <button
+                onClick={() => handleFooterLink('toast:Thank you for subscribing!')}
                 style={{
                   backgroundColor: "#1976d2",
                   color: "white",
@@ -1689,7 +1727,7 @@ const Dashboard = () => {
                 SUBSCRIBE
               </button>
               <input type="checkbox" />
-              <Typography variant="caption">
+              <Typography variant="caption" onClick={() => handleFooterLink('/terms-and-conditions')} sx={{ cursor: 'pointer' }}>
                 I agree to the terms and privacy policy
               </Typography>
             </Box>
@@ -1707,7 +1745,6 @@ const Dashboard = () => {
         </Box>
       </Box>
 
-      {/* Product Expansion Modal */}
       <Dialog open={productModalOpen} onClose={handleProductModalClose} maxWidth="md" fullWidth>
         {expandedProduct && (
           <Box sx={{ p: { xs: 2, sm: 4 }, position: 'relative', minHeight: 420 }}>
@@ -1792,7 +1829,6 @@ const Dashboard = () => {
           </Box>
         )}
       </Dialog>
-      {/* Add Product Dialog */}
       <Dialog onClose={handleClose} open={isOpen}>
         <Box sx={{ p: 3, pt: 2, pb: 2, minWidth: 400, position: 'relative' }}>
           <IconButton
